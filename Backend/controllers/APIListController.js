@@ -478,7 +478,7 @@ const permanentDeletekey = async (req, res) => {
 
     // 4. Delete the key
     // const deletedKey = await KeyModel.findByIdAndDelete(key_id);
-  const deletedKey = await KeyModel.findByIdAndDelete(key_id);
+    const deletedKey = await KeyModel.findByIdAndDelete(key_id);
     if (!deletedKey) return res.status(404).json({ message: "Key not found" });
 
     res.status(200).json({ message: "Key deleted successfully", deletedKey });
@@ -774,9 +774,9 @@ const getlogsDetails = async (req, res) => {
         $lte: formattedEnd,
       };
     }
-if (status) {
-  query.status_code = parseInt(status, 10); // convert string to integer
-}
+    if (status) {
+      query.status_code = parseInt(status, 10); // convert string to integer
+    }
     // if (status) {
     //   if (status === "success") query.status_code = 200;
     //   else if (status === "failure") query.status_code = { $ne: 200 };
@@ -805,36 +805,44 @@ if (status) {
 
     const allLogs = await allLogsCursor.exec();
 
-const statusGroups = {
-  success: [200, 404],
-  fail: [504, 408, 502, 500, 422 ,429 ,401 ,400 , 201, 410,500], 
-};
+    const statusGroups = {
+      success: [200, 404],
+      fail: [504, 408, 502, 500, 422, 429, 401, 400, 201, 410, 500],
+    };
 
-// Determine which codes to count based on filter
-let filteredQuery = { ...query };
-let successCount = 0;
-let failureCount = 0;
+    // Determine which codes to count based on filter
+    let filteredQuery = { ...query };
+    let successCount = 0;
+    let failureCount = 0;
 
-// If a specific status is selected
-if (status) {
-  const statusInt = parseInt(status, 10);
-  filteredQuery.status_code = statusInt;
+    // If a specific status is selected
+    if (status) {
+      const statusInt = parseInt(status, 10);
+      filteredQuery.status_code = statusInt;
 
-  if (statusGroups.success.includes(statusInt)) successCount = await LogModel.countDocuments(filteredQuery);
-  else if (statusGroups.fail.includes(statusInt)) failureCount = await LogModel.countDocuments(filteredQuery);
-  // N/A codes can be counted separately if needed
-} else {
-  // No filter selected → count all grouped by Success/Fail
-  [successCount, failureCount] = await Promise.all([
-    LogModel.countDocuments({ ...filteredQuery, status_code: { $in: statusGroups.success } }),
-    LogModel.countDocuments({ ...filteredQuery, status_code: { $in: statusGroups.fail } }),
-  ]);
-}
+      if (statusGroups.success.includes(statusInt))
+        successCount = await LogModel.countDocuments(filteredQuery);
+      else if (statusGroups.fail.includes(statusInt))
+        failureCount = await LogModel.countDocuments(filteredQuery);
+      // N/A codes can be counted separately if needed
+    } else {
+      // No filter selected → count all grouped by Success/Fail
+      [successCount, failureCount] = await Promise.all([
+        LogModel.countDocuments({
+          ...filteredQuery,
+          status_code: { $in: statusGroups.success },
+        }),
+        LogModel.countDocuments({
+          ...filteredQuery,
+          status_code: { $in: statusGroups.fail },
+        }),
+      ]);
+    }
 
-// Calculate percentages safely
-const total = successCount + failureCount || 1;
-const successPercentage = ((successCount / total) * 100).toFixed(2);
-const failurePercentage = ((failureCount / total) * 100).toFixed(2);  
+    // Calculate percentages safely
+    const total = successCount + failureCount || 1;
+    const successPercentage = ((successCount / total) * 100).toFixed(2);
+    const failurePercentage = ((failureCount / total) * 100).toFixed(2);
 
     // 7. Build chart buckets
     let chartMap = {};
@@ -973,7 +981,7 @@ const getlogsData = async (req, res) => {
 
     const totalDocs = result[0].totalDocs[0]?.count || 0;
     const logs = result[0].paginatedLogs;
-    
+
     // 8. Send response
     res.status(200).json({
       data: keyData,
@@ -1046,24 +1054,26 @@ const getExportLogsData = async (req, res) => {
   }
 };
 const generateDoc = async (req, res) => {
-    try {
-    
-
+  try {
     // 1. Load template
     const templatePath = path.join(__dirname, "../templates/demo_doc.docx");
     const content = fs.readFileSync(templatePath, "binary");
     const zip = new PizZip(content);
 
     // 2. Render with data
-    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+    });
     doc.render({
       API_NAME: "Sample API",
       API_KEY: "12345-ABCDE",
       API_PARAMS: "{param1: value1, param2: value2}",
       API_METHOD: "POST",
       API_ENDPOINT: "https://api.example.com/endpoint",
-      API_CURL: "curl -X POST https://api.example.com/endpoint -H 'Content-Type: application/json' -d '{\"param1\":\"value1\",\"param2\":\"value2\"}'",
-       API_RESPONSE: "{status: success, data: {id: 1, name: Sample API}}",
+      API_CURL:
+        'curl -X POST https://api.example.com/endpoint -H \'Content-Type: application/json\' -d \'{"param1":"value1","param2":"value2"}\'',
+      API_RESPONSE: "{status: success, data: {id: 1, name: Sample API}}",
     });
 
     // 3. Generate buffer
@@ -1081,6 +1091,32 @@ const generateDoc = async (req, res) => {
   }
 };
 
+const getcustomerbysearch = async (req, res) => {
+  try {
+    const { search = "" } = req.query;
+
+       const users = await mongoose.connection.db
+      .collection("users")
+      .aggregate([
+        {
+          $lookup: {
+            from: "roles",        // roles collection
+            localField: "roleId", // field in users
+            foreignField: "_id",  // field in roles
+            as: "roleInfo",
+          },
+        },
+        { $unwind: "$roleInfo" }, // flatten role array
+        { $match: { "roleInfo.roleName": "Customer", name: { $regex: search, $options: "i" } } }, // filter by role and search
+        { $project: { _id: 1, name: 1 } }, // only return id and name
+      ])
+      .toArray();
+
+    res.status(200).json({ data :users, message: "Users fetched successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = {
   getAPIList,
@@ -1097,6 +1133,8 @@ module.exports = {
   getAPIkeyhistoryList,
   restorekey,
   getKeyLogs,
-  generateDoc ,
-  getlogsData , permanentDeletekey
+  generateDoc,
+  getlogsData,
+  permanentDeletekey,
+  getcustomerbysearch,
 };

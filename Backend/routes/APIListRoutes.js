@@ -17,7 +17,8 @@ const {
   getKeyLogs,
   generateDoc ,
   getlogsData,
-  permanentDeletekey
+  permanentDeletekey ,
+  getcustomerbysearch
 } = require("../controllers/APIListController");
 const protect = require("../middleware/AuthMiddleware");
 const RolePermissionMiddleware = require("../middleware/RolePermissionMiddleware");
@@ -50,5 +51,6 @@ router.get("/get-logs-details/:key",protect,RolePermissionMiddleware("Api_key_De
 router.get("/get-logs-data/:key",protect,RolePermissionMiddleware("Api_key_Details" ,"View_Logs"), getlogsData);
 router.get("/exportLogsData/:key", protect, getExportLogsData);
 router.get("/generate-doc" ,generateDoc) 
+router.get("/customer-by-search",  getcustomerbysearch);
 
 module.exports = router;

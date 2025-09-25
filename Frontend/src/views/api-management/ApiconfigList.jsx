@@ -4,8 +4,8 @@ import Card from '../../components/Card/MainCard';
 import axios from 'axios';
 import DataTable from 'react-data-table-component';
 import { FaEdit, FaTrash, FaEye } from 'react-icons/fa';
-import { FaGithub } from "react-icons/fa6";
-
+import { FaGithub } from 'react-icons/fa6';
+import { IoMdPersonAdd } from 'react-icons/io';
 // import { CSVLink } from 'react-csv';
 import * as XLSX from 'xlsx';
 // import jsPDF from 'jspdf';
@@ -15,7 +15,10 @@ import { toast, ToastContainer } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import 'react-toastify/dist/ReactToastify.css';
 import { api } from 'views/api';
+import Select from 'react-select';
+import makeAnimated from 'react-select/animated';
 
+const animatedComponents = makeAnimated();
 const ApiconfigrationList = () => {
   const navigate = useNavigate();
   const [apiList, setApiList] = useState([]);
@@ -28,10 +31,44 @@ const ApiconfigrationList = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedAPI, setSelectedAPI] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+    const [selected, setSelected] = useState([]);
+    const [options, setOptions] = useState([]);
   const [editData, setEditData] = useState({});
   useEffect(() => {
     getApiList(currentPage, perPage, search);
   }, [currentPage, perPage, search]);
+
+
+    const fetchcustomerData = async (inputValue) => {
+      if (!inputValue) return [];
+      try {
+        const res = await axios.get(`${api}/customer-by-search?search=${inputValue}`, {
+          withCredentials: true
+        });
+        if (res.status == 200) {
+          setOptions(
+            res.data?.data?.map((item) => ({
+              value: item._id,
+              label: item.apiName
+            })) || []
+          );
+        }
+        return (  
+          res.data?.data?.map((item) => ({
+            value: item._id,
+            label: item.apiName
+          })) || []
+        );
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        return [];
+      }
+    };
+useEffect(() => {
+  fetchcustomerData();
+})
+
 
   const getApiList = async (page = 1, limit = 10, keyword = '') => {
     try {
@@ -43,7 +80,7 @@ const ApiconfigrationList = () => {
       console.log('+++++++++', permission);
       setTotalRows(res.data.total);
     } catch (err) {
-   if (err.response && err.response.status === 403) {
+      if (err.response && err.response.status === 403) {
         navigate(`/error/${err.response.status}`);
         toast.error(err.response?.data?.message || 'Access denied');
       } else {
@@ -117,7 +154,6 @@ const ApiconfigrationList = () => {
     }
   };
 
-
   const handleClick = async () => {
     // const payload = {
     //   apiName: "testdoc",
@@ -130,14 +166,14 @@ const ApiconfigrationList = () => {
     // };
 
     const res = await axios.get(`${api}/generate-doc`, {
-      responseType: "blob",
+      responseType: 'blob'
     });
 
     const blob = new Blob([res.data], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     a.download = `testdoc_Guide_${Date.now()}.docx`;
     document.body.appendChild(a);
@@ -149,10 +185,13 @@ const ApiconfigrationList = () => {
     try {
       const updatedStatus = !selectedAPI.status;
 
-      await axios.put(`${api}/apistatusupdate/${selectedAPI._id}`, {
-
-        status: updatedStatus
-      } , { withCredentials: true });
+      await axios.put(
+        `${api}/apistatusupdate/${selectedAPI._id}`,
+        {
+          status: updatedStatus
+        },
+        { withCredentials: true }
+      );
 
       toast.success(`Status updated to ${updatedStatus ? 'Active' : 'Inactive'}`);
       getApiList(currentPage, perPage, search); // Refresh list
@@ -226,7 +265,7 @@ const ApiconfigrationList = () => {
       name: 'Action',
       cell: (row) => (
         <>
-             {/* <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>View</Tooltip>}>
+          {/* <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>View</Tooltip>}>
                       <span>
                         <FaEye onClick={() => navigate(`/api-detail/${row._id}`)} style={{ cursor: 'pointer', color: 'green' }} size={20} />
                       </span>
@@ -251,43 +290,35 @@ const ApiconfigrationList = () => {
           >
             Edit
           </Button> */}
-            <div className="d-flex align-items-center gap-3">
-   
-      {permission[0]?.action?.includes('View') && (
-     <OverlayTrigger
-        placement="top"
-        overlay={<Tooltip id={`tooltip-view-${row._id}`}>View</Tooltip>}
-      >
-        <span>
-          <FaEye
-            onClick={() => navigate(`/api-detail/${row._id}`)}
-            style={{ cursor: "pointer", color: "green" }}
-            size={20}
-          />
-        </span>
-      </OverlayTrigger>
-                )}
-      {permission[0]?.action?.includes('View_code') && (
-              <OverlayTrigger
-        placement="top"
-        overlay={<Tooltip id={`tooltip-github-${row._id}`}>GitHub</Tooltip>}
-      >
-        <span>
-          <FaGithub
-               onClick={() => window.open(row.github_link, "_blank")}
-            style={{ cursor: "pointer", color: "black" }}
-            size={20}
-          />
-        </span>
-      </OverlayTrigger>
-          )}
-          
+          <div className="d-flex align-items-center gap-3">
+            {permission[0]?.action?.includes('View') && (
+              <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>View</Tooltip>}>
+                <span>
+                  <FaEye onClick={() => navigate(`/api-detail/${row._id}`)} style={{ cursor: 'pointer', color: 'green' }} size={20} />
+                </span>
+              </OverlayTrigger>
+            )}
+            {permission[0]?.action?.includes('View') && (
+              <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>Add Cutomers</Tooltip>}>
+                <span>
+                  <IoMdPersonAdd onClick={() => setShowAddCustomModal(true)} style={{ cursor: 'pointer', color: 'green' }} size={20} />
+                </span>
+              </OverlayTrigger>
+            )}
+            {permission[0]?.action?.includes('View_code') && (
+              <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-github-${row._id}`}>GitHub</Tooltip>}>
+                <span>
+                  <FaGithub
+                    onClick={() => window.open(row.github_link, '_blank')}
+                    style={{ cursor: 'pointer', color: 'black' }}
+                    size={20}
+                  />
+                </span>
+              </OverlayTrigger>
+            )}
 
-         {permission[0]?.action?.includes('Generate_Doc') && (
-              <button onClick={handleClick}>Generate User Guide</button>
-          )}
-  
-    </div>
+            {permission[0]?.action?.includes('Generate_Doc') && <button onClick={handleClick}>Generate User Guide</button>}
+          </div>
         </>
       ),
       width: '150px'
@@ -415,6 +446,58 @@ const ApiconfigrationList = () => {
           >
             Save Changes
           </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showAddCustomModal} onHide={() => setShowAddCustomModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Edit API Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Row>
+              <Col md={3} xs={12}>
+                <label className="form-label d-block mb-1">Search API</label>
+                <Select
+                  isMulti
+                  closeMenuOnSelect={false}
+                  components={animatedComponents}
+                  loadOptions={fetchcustomerData}
+                  // onInputChange={(input) => {
+                  //   fetchSearchData(input).then((data) => setOptions(data));
+                  // }}
+                  options={options}
+                  value={selected}
+                  onChange={(selectedItems) => setSelected(selectedItems)}
+                  placeholder="Search & select API"
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      minHeight: '40px',
+                      border: state.isFocused ? '1px solid #070707ff' : '1px solid #ccc',
+                      boxShadow: 'none',
+                      fontSize: '14px'
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      borderColor: '#070707ff',
+                      fontSize: '12px'
+                    }),
+                    valueContainer: (base) => ({
+                      ...base,
+                      padding: '2px 8px'
+                    })
+                  }}
+                />
+              </Col>
+            </Row>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowAddCustomModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary">Save Changes</Button>
         </Modal.Footer>
       </Modal>
     </>
