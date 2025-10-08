@@ -1,6 +1,7 @@
 const API_Config = require("../models/APIConfigrationModel");
 const key_tables_logs = require("../models/keytablesLogModel");
 const mongoose = require("mongoose");
+const { ObjectId } = require("mongodb");
 const axios = require("axios");
 const moment = require("moment");
 const { format } = require("date-fns");
@@ -26,6 +27,8 @@ const Docxtemplater = require("docxtemplater");
 
 const getAPIList = async (req, res) => {
   const permission = res.locals.permissions;
+  const rolelevel = req.user.Rolelevel;
+  console.log("rolelevel", rolelevel);
   console.log("permission in my api", permission);
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
@@ -39,6 +42,10 @@ const getAPIList = async (req, res) => {
         { applicationType: { $regex: search, $options: "i" } },
       ],
     };
+    if (rolelevel === 4) {
+      query.customers = { $elemMatch: { customerId: req.user.id } };
+    }
+
     const skip = (page - 1) * limit;
     const data = await API_Config.find(query)
       .sort({ _id: -1 })
@@ -54,7 +61,7 @@ const getAPIList = async (req, res) => {
 const getAPIListExportData = async (req, res) => {
   try {
     const { search = "" } = req.query;
-
+    const rolelevel = req.user.Rolelevel;
     const query = {
       $or: [
         { apiName: { $regex: search, $options: "i" } },
@@ -64,6 +71,9 @@ const getAPIListExportData = async (req, res) => {
         { applicationType: { $regex: search, $options: "i" } },
       ],
     };
+    if (rolelevel === 4) {
+      query.customers = { $elemMatch: { customerId: req.user.id } };
+    }
     const data = await API_Config.find(query);
 
     res.status(200).json({ data });
@@ -86,7 +96,63 @@ const apistatusupdate = async (req, res) => {
     res.status(500).json({ message: err.message || "Server error" });
   }
 };
+const addcustomerToAPI = async (req, res) => {
+  const id = req.params.id;
+  const customers = req.body; // Expecting an array of { customerId, customerName }
 
+  console.log("📥 Received Customers:", customers);
+
+  if (!Array.isArray(customers)) {
+    return res
+      .status(400)
+      .json({ message: "Request body must be an array of customers" });
+  }
+
+  try {
+    // Find API config by id
+    const apiConfig = await API_Config.findById(id);
+    if (!apiConfig) {
+      return res.status(404).json({ message: "API Config not found" });
+    }
+
+    // Track duplicates
+    let addedCustomers = [];
+    let skippedCustomers = [];
+
+    for (const cust of customers) {
+      const { customerId, customerName } = cust;
+
+      if (!customerId || !customerName) {
+        skippedCustomers.push(cust);
+        continue;
+      }
+
+      const alreadyExists = apiConfig.customers.some(
+        (c) => c.customerId.toString() === customerId
+      );
+
+      if (alreadyExists) {
+        skippedCustomers.push(cust);
+      } else {
+        apiConfig.customers.push({ customerId, customerName });
+        addedCustomers.push(cust);
+      }
+    }
+
+    await apiConfig.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Customer(s) processed",
+      added: addedCustomers,
+      skipped: skippedCustomers,
+      data: apiConfig,
+    });
+  } catch (err) {
+    console.error("❌ Error in addcustomerToAPI:", err);
+    res.status(500).json({ message: err.message || "Server error" });
+  }
+};
 // const getAPIListById = async (req, res) => {
 //   const id = req.params.id;
 //   const { page = 1, limit = 10, search = "" } = req.query;
@@ -187,6 +253,8 @@ const getAPIListById = async (req, res) => {
 
 const getAPIkeyList = async (req, res) => {
   const { id } = req.params;
+  const rolelevel = req.user.Rolelevel;
+  const clientName = req.user.name;
   const { page = 1, limit = 10, search = "" } = req.query;
   const pageNumber = parseInt(page);
   const limitNumber = parseInt(limit);
@@ -199,27 +267,23 @@ const getAPIkeyList = async (req, res) => {
     }
     const { dbName } = config;
     const conn = await connectDynamicDB(dbName);
-    const keySchema = new mongoose.Schema({}, { strict: false });
-    // const key_tables = "key_tables_" + new Date().getFullYear();
-    // console.log("key_tables", key_tables);
-    const KeyModel =
-      conn.models["key_tables"] || conn.model("key_tables", keySchema);
-    const keyFilter = search.trim()
-      ? {
-          $and: [
-            { deletedAt: null },
-            {
-              $or: [
-                { key: { $regex: search, $options: "i" } },
-                { name: { $regex: search, $options: "i" } },
-              ],
-            },
-          ],
-        }
-      : { deletedAt: null };
+
+    const KeyModel = conn.collection("key_tables");
+
+    let keyFilter = { deletedAt: null };
+    if (rolelevel === 4) {
+      keyFilter.name = clientName;
+    }
+    if (search && search.trim()) {
+      // Apply search for other roles
+      keyFilter.$or = [
+        { key: { $regex: search, $options: "i" } },
+        { name: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const [docs, totalDocs] = await Promise.all([
-      KeyModel.find(keyFilter).skip(skip).limit(limitNumber).lean(),
+      KeyModel.find(keyFilter).skip(skip).limit(limitNumber).toArray(),
       KeyModel.countDocuments(keyFilter),
     ]);
 
@@ -252,10 +316,7 @@ const getAPIkeyhistoryList = async (req, res) => {
     }
     const { dbName } = config;
     const conn = await connectDynamicDB(dbName);
-    const keySchema = new mongoose.Schema({}, { strict: false });
-    const KeyModel =
-      conn.models["key_tables"] || conn.model("key_tables", keySchema);
-
+    const KeyModel = conn.collection("key_tables");
     // const keyFilter = search.trim()
     //   ? {
     //       $or: [
@@ -279,7 +340,7 @@ const getAPIkeyhistoryList = async (req, res) => {
       : { deletedAt: { $ne: null } };
 
     const [docs, totalDocs] = await Promise.all([
-      KeyModel.find(keyFilter).skip(skip).limit(limitNumber).lean(),
+      KeyModel.find(keyFilter).skip(skip).limit(limitNumber).toArray(),
       KeyModel.countDocuments(keyFilter),
     ]);
 
@@ -292,7 +353,7 @@ const getAPIkeyhistoryList = async (req, res) => {
       },
     });
   } catch (err) {
-    // console.error(" getAPIkeyList error:", err.message);
+    console.log(" getAPIkeyList error:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
@@ -374,22 +435,27 @@ const addkey = async (req, res) => {
 
     const conn = await connectDynamicDB(dbName);
 
-    // 3. Define a dynamic model for the key collection
-    const keyschema = new mongoose.Schema({}, { strict: false });
-    const KeyModel = conn.model("key_tables", keyschema, "key_tables");
-
+    const KeyModel = conn.collection("key_tables");
     // 4. Create a new document
-    const newKey = new KeyModel({
+    const newKey = {
       name,
       key,
       limit,
       usage: 0,
       status,
-    });
-
-    await newKey.save();
-
-    res.status(201).json({ message: "Key added successfully", newKey });
+    };
+    const result = await KeyModel.insertOne(newKey);
+    if (result.insertedId) {
+      return res.status(201).json({
+        success: true,
+        message: "Key created successfully",
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to create key",
+      });
+    }
   } catch (error) {
     // console.error("Add key error:", error.message);
     res.status(500).json({ message: error.message });
@@ -406,16 +472,12 @@ const updatekey = async (req, res) => {
 
     const { dbName } = data;
     const conn = await connectDynamicDB(dbName);
+    const KeyModel = conn.collection("key_tables");
 
-    // Define model
-    const keyschema = new mongoose.Schema({}, { strict: false });
-    const KeyModel = conn.model("key_tables", keyschema, "key_tables");
-
-    // Update document
-    const updatedKey = await KeyModel.findByIdAndUpdate(
-      key_id,
-      { limit, status },
-      { new: true }
+    const updatedKey = await KeyModel.findOneAndUpdate(
+      { _id: new ObjectId(key_id) },
+      { $set: { limit, status } },
+      { returnDocument: "after" }
     );
 
     if (!updatedKey) return res.status(404).json({ error: "Key not found" });
@@ -440,16 +502,12 @@ const deletekey = async (req, res) => {
     const { dbName } = apiConfig;
 
     const conn = await connectDynamicDB(dbName);
-    // 3. Define dynamic model
-    const keyschema = new mongoose.Schema({}, { strict: false });
-    const KeyModel = conn.model("key_tables", keyschema, "key_tables");
+    const KeyModel = conn.collection("key_tables");
 
-    // 4. Delete the key
-    // const deletedKey = await KeyModel.findByIdAndDelete(key_id);
-    const deletedKey = await KeyModel.findByIdAndUpdate(
-      key_id,
+    const deletedKey = await KeyModel.findOneAndUpdate(
+      { _id: new ObjectId(key_id) },
       { $set: { deletedAt: new Date() } },
-      { new: true } // returns the updated doc
+      { returnDocument: "after" }
     );
     if (!deletedKey) return res.status(404).json({ message: "Key not found" });
 
@@ -473,12 +531,14 @@ const permanentDeletekey = async (req, res) => {
 
     const conn = await connectDynamicDB(dbName);
     // 3. Define dynamic model
-    const keyschema = new mongoose.Schema({}, { strict: false });
-    const KeyModel = conn.model("key_tables", keyschema, "key_tables");
+
+    const KeyModel = conn.collection("key_tables");
 
     // 4. Delete the key
     // const deletedKey = await KeyModel.findByIdAndDelete(key_id);
-    const deletedKey = await KeyModel.findByIdAndDelete(key_id);
+    const deletedKey = await KeyModel.findOneAndDelete({
+      _id: new ObjectId(key_id),
+    });
     if (!deletedKey) return res.status(404).json({ message: "Key not found" });
 
     res.status(200).json({ message: "Key deleted successfully", deletedKey });
@@ -500,16 +560,12 @@ const restorekey = async (req, res) => {
     const { dbName } = apiConfig;
 
     const conn = await connectDynamicDB(dbName);
-    // 3. Define dynamic model
-    const keyschema = new mongoose.Schema({}, { strict: false });
-    const KeyModel = conn.model("key_tables", keyschema, "key_tables");
 
-    // 4. Delete the key
-    // const deletedKey = await KeyModel.findByIdAndDelete(key_id);
-    const restoredKey = await KeyModel.findByIdAndUpdate(
-      key_id,
+    const KeyModel = conn.collection("key_tables");
+    const restoredKey = await KeyModel.findOneAndUpdate(
+      { _id: new ObjectId(key_id) },
       { $set: { deletedAt: null } },
-      { new: true } // returns the updated doc
+      { returnDocument: "after" }
     );
     if (!restoredKey) return res.status(404).json({ message: "Key not found" });
 
@@ -536,16 +592,10 @@ const getKeyLogs = async (req, res) => {
   }
 };
 
-// const getKeyDetails = async (req, res) => {
+// const getlogsDetails = async (req, res) => {
 //   const key = String(req.params.key);
-//   const { id, startDate, endDate } = req.query;
-//   // console.log("📥 Received Query Params:", req.query);
-
-//   const page = parseInt(req.query.page) || 1;
-//   const limit = parseInt(req.query.limit) || 10;
-//   const skip = (page - 1) * limit;
+//   const { id, startDate, endDate, status, domain } = req.query;
 //   console.log("📥 Received Query Params:", req.query);
-//   console.log("📥 Received Query Params:", key);
 
 //   try {
 //     // 1. Get key config
@@ -553,74 +603,75 @@ const getKeyLogs = async (req, res) => {
 //     if (!keyData) return res.status(404).json({ message: "Key not found" });
 
 //     const dbName = keyData.dbName;
-//     console.log("📦 Target DB:", dbName);
-
-//     // 2. Connect to target DB
 //     const conn = await connectDynamicDB(dbName);
+//     const logs_table = `logs_table_${new Date().getFullYear()}_${String(
+//       new Date().getMonth() + 1
+//     ).padStart(2, "0")}`;
+//     const LogModel = conn.collection(`${logs_table}`);
 
-//     // 3. Log model
-//     const logSchema = new mongoose.Schema({}, { strict: false });
-//     const logs_table = `logs_table_${new Date().getFullYear()}_${String(new Date().getMonth()+1).padStart(2,"0")}`;
-//     console.log("logs_table" , logs_table)
-//     const LogModel = conn.model(`${logs_table}`, logSchema, `${logs_table}`);
-
-//     // 4. Build Query
-//     const query = { key };
-//     const formattedStart = dateFormatter(startDate); // OR use: new Date(startDate + "T00:00:00")
-//     const formattedEnd = dateFormatter(endDate); // OR use: new Date(endDate + "T23:59:59")
-
+//        const collections = await conn.listCollections().toArray();
+//     const logCollections = collections
+//       .map((c) => c.name)
+//       .filter((name) => name.startsWith("logs_table_"));
+// console.log("logCollections",logCollections);
+//     // 3. Query filters
+//     const query = { key, vendor_name: domain };
 //     if (startDate && endDate) {
 //       query.request_time = {
-//         $gte: formattedStart,
-//         $lte: formattedEnd,
+//         $gte: format(new Date(startDate), "yyyy-MM-dd HH:mm:ss"),
+//         $lte: format(new Date(endDate), "yyyy-MM-dd HH:mm:ss"),
 //       };
 //     }
-//     const result = await LogModel.aggregate([
-//       { $match: query },
-//       { $sort: { _id: -1 } },
-//       {
-//         $facet: {
-//           totalDocs: [{ $count: "count" }],
-//           paginatedLogs: [{ $skip: skip }, { $limit: limit }],
-//           allLogs: [], // no skip/limit = fetch all matching logs
-//         },
-//       },
-//     ]);
+//     if (status) {
+//       query.status_code = parseInt(status, 10); // convert string to integer
+//     }
 
-//     // Extract results
-//     const totalDocs = result[0].totalDocs[0]?.count || 0;
-//     const logs = result[0].paginatedLogs;
-//     const alllogs = result[0].allLogs;
+//      const totalDocs = await LogModel.countDocuments(query);
 
-//     // Count status codes
-//     const successCount = await LogModel.countDocuments({
-//       ...query,
-//       status_code: 200,
-//     });
+//    const allLogs = await LogModel
+//       .find(query, { projection: { request_time: 1, status_code: 1 } })
+//       .toArray();
 
-//     const notfoundCount = await LogModel.countDocuments({
-//       ...query,
-//       status_code: 404,
-//     });
+//     const statusGroups = {
+//       success: [200, 404],
+//       fail: [504, 408, 502, 500, 422, 429, 401, 400, 201, 410, 500],
+//     };
 
-//     const failureCount = await LogModel.countDocuments({
-//       ...query,
-//       $and: [
-//         {
-//           $or: [
-//             { status_code: { $ne: 200 } },
-//             { status_code: { $exists: false } },
-//           ],
-//         },
-//         { status_code: { $ne: 404 } },
-//       ],
-//     });
+//     // Determine which codes to count based on filter
+//     let filteredQuery = { ...query };
+//     let successCount = 0;
+//     let failureCount = 0;
 
-//     const total = successCount + failureCount + notfoundCount;
+//     // If a specific status is selected
+//     if (status) {
+//       const statusInt = parseInt(status, 10);
+//       filteredQuery.status_code = statusInt;
+
+//       if (statusGroups.success.includes(statusInt))
+//         successCount = await LogModel.countDocuments(filteredQuery);
+//       else if (statusGroups.fail.includes(statusInt))
+//         failureCount = await LogModel.countDocuments(filteredQuery);
+//       // N/A codes can be counted separately if needed
+//     } else {
+//       // No filter selected → count all grouped by Success/Fail
+//       [successCount, failureCount] = await Promise.all([
+//         LogModel.countDocuments({
+//           ...filteredQuery,
+//           status_code: { $in: statusGroups.success },
+//         }),
+//         LogModel.countDocuments({
+//           ...filteredQuery,
+//           status_code: { $in: statusGroups.fail },
+//         }),
+//       ]);
+//     }
+
+//     // Calculate percentages safely
+//     const total = successCount + failureCount || 1;
 //     const successPercentage = ((successCount / total) * 100).toFixed(2);
 //     const failurePercentage = ((failureCount / total) * 100).toFixed(2);
-//     const notfoundPercentage = ((notfoundCount / total) * 100).toFixed(2);
 
+//     // 7. Build chart buckets
 //     let chartMap = {};
 //     let fullLabels = [];
 
@@ -629,29 +680,20 @@ const getKeyLogs = async (req, res) => {
 //       : moment().subtract(14, "days").startOf("day");
 //     let end = endDate ? moment(endDate).endOf("day") : moment().endOf("day");
 
-//     let durationInDays = end.diff(start, "days", true); // get float diff
+//     let durationInDays = end.diff(start, "days", true);
 //     let useHourly = durationInDays <= 2;
 
 //     if (useHourly) {
-//       // Use 3-hour intervals
+//       // 3-hour intervals
 //       let current = start.clone();
 //       while (current <= end) {
-//         const label = current.format("YYYY-MM-DD HH:00"); // hourly label
+//         const label = current.format("YYYY-MM-DD HH:00");
 //         fullLabels.push(label);
-
-//         chartMap[label] = {
-//           interval: label,
-//           total: 0,
-//           success: 0,
-//           failure: 0,
-//           notfound: 0,
-//         };
-
+//         chartMap[label] = { interval: label, total: 0, success: 0, failure: 0 };
 //         current.add(3, "hours");
 //       }
 
-//       // Process each log entry into 3-hour buckets
-//       alllogs.forEach((log) => {
+//       allLogs.forEach((log) => {
 //         const logTime = moment(log.request_time);
 //         const bucketHour = logTime
 //           .startOf("hour")
@@ -659,91 +701,57 @@ const getKeyLogs = async (req, res) => {
 //         const label = bucketHour.format("YYYY-MM-DD HH:00");
 
 //         const status = log.status_code;
-
 //         if (chartMap[label]) {
-//           chartMap[label].total += 1;
-
-//           if (status === 200) {
-//             chartMap[label].success += 1;
-//           } else if (status === 404) {
-//             chartMap[label].notfound += 1;
-//           } else {
-//             chartMap[label].failure += 1;
-//           }
+//           chartMap[label].total++;
+//           if (status === 200) chartMap[label].success++;
+//           else chartMap[label].failure++;
 //         }
 //       });
 //     } else {
-//       // Default daily interval
+//       // Daily intervals
 //       let current = start.clone();
 //       while (current <= end) {
 //         const label = current.format("YYYY-MM-DD");
 //         fullLabels.push(label);
-
-//         chartMap[label] = {
-//           interval: label,
-//           total: 0,
-//           success: 0,
-//           failure: 0,
-//           notfound: 0,
-//         };
-
+//         chartMap[label] = { interval: label, total: 0, success: 0, failure: 0 };
 //         current.add(1, "day");
 //       }
 
-//       alllogs.forEach((log) => {
+//       allLogs.forEach((log) => {
 //         const date = moment(log.request_time).format("YYYY-MM-DD");
 //         const status = log.status_code;
-
 //         if (chartMap[date]) {
-//           chartMap[date].total += 1;
-
-//           if (status === 200) {
-//             chartMap[date].success += 1;
-//           } else if (status === 404) {
-//             chartMap[date].notfound += 1;
-//           } else {
-//             chartMap[date].failure += 1;
-//           }
+//           chartMap[date].total++;
+//           if (status === 200) chartMap[date].success++;
+//           else chartMap[date].failure++;
 //         }
 //       });
 //     }
 
-//     // ✅ Final chart-ready format
 //     const formattedChartData = fullLabels.map((label) => chartMap[label]);
 
-//     // 7. Send response
+//     // 8. Send response
 //     res.status(200).json({
 //       data: keyData,
 //       logdata: {
-//         data: logs,
 //         totalDocs,
-//         currentPage: page,
-//         limit,
 //         successPercentage,
 //         successCount,
 //         failurePercentage,
 //         failureCount,
-//         notfoundPercentage,
-//         notfoundCount,
 //         chartData: formattedChartData,
 //       },
 //       message: "Logs fetched successfully",
 //     });
-
-//     // console.log("formattedChartData", formattedChartData);
 //   } catch (err) {
-//     // console.error("❌ Error in getKeyDetails:", err);
 //     res.status(500).json({ message: err.message || "Server error" });
 //   }
 // };
+
 const getlogsDetails = async (req, res) => {
   const key = String(req.params.key);
   const { id, startDate, endDate, status, domain } = req.query;
   console.log("📥 Received Query Params:", req.query);
-
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const skip = (page - 1) * limit;
 
   try {
     // 1. Get key config
@@ -753,113 +761,113 @@ const getlogsDetails = async (req, res) => {
     const dbName = keyData.dbName;
     const conn = await connectDynamicDB(dbName);
 
-    // 2. Logs model
-    const logSchema = new mongoose.Schema({}, { strict: false });
-    const logs_table = `logs_table_${new Date().getFullYear()}_${String(
-      new Date().getMonth() + 1
-    ).padStart(2, "0")}`;
-    const LogModel = conn.model(`${logs_table}`, logSchema, `${logs_table}`);
+    // 2. List all collections
+    const collections = await conn.listCollections().toArray();
+    const existingCollections = collections
+      .map((c) => c.name)
+      .filter((name) => name.startsWith("logs_table_"));
 
-    // 3. Query filters
+    // 3. Determine which collections to query based on startDate/endDate
+    let logCollections = [];
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      let current = new Date(start.getFullYear(), start.getMonth(), 1);
+      while (current <= end) {
+        const collectionName = `logs_table_${current.getFullYear()}_${String(
+          current.getMonth() + 1
+        ).padStart(2, "0")}`;
+        if (existingCollections.includes(collectionName)) {
+          logCollections.push(collectionName);
+        }
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else {
+      // Default to current month
+      const now = new Date();
+      const collectionName = `logs_table_${now.getFullYear()}_${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}`;
+      if (existingCollections.includes(collectionName)) {
+        logCollections.push(collectionName);
+      }
+    }
+
+    console.log("Collections to query:", logCollections);
+
+    if (!logCollections.length) {
+      return res
+        .status(404)
+        .json({ message: "No logs found for the selected date range" });
+    }
+
+    // 4. Build query filters
     const query = { key, vendor_name: domain };
-    const formattedStart = startDate
-      ? format(new Date(startDate), "yyyy-MM-dd HH:mm:ss")
-      : null;
-    const formattedEnd = endDate
-      ? format(new Date(endDate), "yyyy-MM-dd HH:mm:ss")
-      : null;
-    if (formattedStart && formattedEnd) {
+    if (startDate && endDate) {
       query.request_time = {
-        $gte: formattedStart,
-        $lte: formattedEnd,
+        $gte: format(new Date(startDate), "yyyy-MM-dd HH:mm:ss"),
+        $lte: format(new Date(endDate), "yyyy-MM-dd HH:mm:ss"),
       };
     }
     if (status) {
-      query.status_code = parseInt(status, 10); // convert string to integer
+      query.status_code = parseInt(status, 10);
     }
-    // if (status) {
-    //   if (status === "success") query.status_code = 200;
-    //   else if (status === "failure") query.status_code = { $ne: 200 };
-    // }
 
-    // 4. Get total + paginated logs (facet with NO allLogs)
-    const result = await LogModel.aggregate([
-      { $match: query },
-      { $sort: { _id: -1 } },
-      {
-        $facet: {
-          totalDocs: [{ $count: "count" }],
-          paginatedLogs: [{ $skip: skip }, { $limit: limit }],
-        },
-      },
-    ]);
+    // 5. Aggregate logs across all relevant collections
+    let allLogs = [];
+    for (const collName of logCollections) {
+      const LogModel = conn.collection(collName);
+      const logs = await LogModel.find(query, {
+        projection: { request_time: 1, status_code: 1 },
+      }).toArray();
+      allLogs = allLogs.concat(logs);
+    }
 
-    const totalDocs = result[0].totalDocs[0]?.count || 0;
-    const logs = result[0].paginatedLogs;
+    const totalDocs = allLogs.length;
 
-    // 5. For chart data: fetch **only required fields**
-    const allLogsCursor = LogModel.find(query, {
-      request_time: 1,
-      status_code: 1,
-    }).lean(); // lean = plain objects (faster, less memory)
-
-    const allLogs = await allLogsCursor.exec();
-
+    // 6. Count success/failure
     const statusGroups = {
       success: [200, 404],
-      fail: [504, 408, 502, 500, 422, 429, 401, 400, 201, 410, 500],
+      fail: [504, 408, 502, 500, 422, 429, 401, 400, 201, 410],
     };
 
-    // Determine which codes to count based on filter
-    let filteredQuery = { ...query };
-    let successCount = 0;
-    let failureCount = 0;
+    let successCount = allLogs.filter((log) =>
+      statusGroups.success.includes(log.status_code)
+    ).length;
+    let failureCount = allLogs.filter((log) =>
+      statusGroups.fail.includes(log.status_code)
+    ).length;
 
-    // If a specific status is selected
+    // If specific status filter applied
     if (status) {
       const statusInt = parseInt(status, 10);
-      filteredQuery.status_code = statusInt;
-
-      if (statusGroups.success.includes(statusInt))
-        successCount = await LogModel.countDocuments(filteredQuery);
-      else if (statusGroups.fail.includes(statusInt))
-        failureCount = await LogModel.countDocuments(filteredQuery);
-      // N/A codes can be counted separately if needed
-    } else {
-      // No filter selected → count all grouped by Success/Fail
-      [successCount, failureCount] = await Promise.all([
-        LogModel.countDocuments({
-          ...filteredQuery,
-          status_code: { $in: statusGroups.success },
-        }),
-        LogModel.countDocuments({
-          ...filteredQuery,
-          status_code: { $in: statusGroups.fail },
-        }),
-      ]);
+      successCount = statusGroups.success.includes(statusInt)
+        ? allLogs.length
+        : 0;
+      failureCount = statusGroups.fail.includes(statusInt) ? allLogs.length : 0;
     }
 
-    // Calculate percentages safely
     const total = successCount + failureCount || 1;
     const successPercentage = ((successCount / total) * 100).toFixed(2);
     const failurePercentage = ((failureCount / total) * 100).toFixed(2);
 
-    // 7. Build chart buckets
+    // 7. Build chart data (hourly if <= 2 days, else daily)
     let chartMap = {};
     let fullLabels = [];
-
-    let start = startDate
+    let startMoment = startDate
       ? moment(startDate).startOf("day")
       : moment().subtract(14, "days").startOf("day");
-    let end = endDate ? moment(endDate).endOf("day") : moment().endOf("day");
+    let endMoment = endDate
+      ? moment(endDate).endOf("day")
+      : moment().endOf("day");
 
-    let durationInDays = end.diff(start, "days", true);
+    let durationInDays = endMoment.diff(startMoment, "days", true);
     let useHourly = durationInDays <= 2;
 
     if (useHourly) {
-      // 3-hour intervals
-      let current = start.clone();
-      while (current <= end) {
+      let current = startMoment.clone();
+      while (current <= endMoment) {
         const label = current.format("YYYY-MM-DD HH:00");
         fullLabels.push(label);
         chartMap[label] = { interval: label, total: 0, success: 0, failure: 0 };
@@ -873,17 +881,16 @@ const getlogsDetails = async (req, res) => {
           .subtract(logTime.hour() % 3, "hours");
         const label = bucketHour.format("YYYY-MM-DD HH:00");
 
-        const status = log.status_code;
         if (chartMap[label]) {
           chartMap[label].total++;
-          if (status === 200) chartMap[label].success++;
+          if (statusGroups.success.includes(log.status_code))
+            chartMap[label].success++;
           else chartMap[label].failure++;
         }
       });
     } else {
-      // Daily intervals
-      let current = start.clone();
-      while (current <= end) {
+      let current = startMoment.clone();
+      while (current <= endMoment) {
         const label = current.format("YYYY-MM-DD");
         fullLabels.push(label);
         chartMap[label] = { interval: label, total: 0, success: 0, failure: 0 };
@@ -892,10 +899,10 @@ const getlogsDetails = async (req, res) => {
 
       allLogs.forEach((log) => {
         const date = moment(log.request_time).format("YYYY-MM-DD");
-        const status = log.status_code;
         if (chartMap[date]) {
           chartMap[date].total++;
-          if (status === 200) chartMap[date].success++;
+          if (statusGroups.success.includes(log.status_code))
+            chartMap[date].success++;
           else chartMap[date].failure++;
         }
       });
@@ -907,10 +914,7 @@ const getlogsDetails = async (req, res) => {
     res.status(200).json({
       data: keyData,
       logdata: {
-        data: logs,
         totalDocs,
-        currentPage: page,
-        limit,
         successPercentage,
         successCount,
         failurePercentage,
@@ -920,80 +924,198 @@ const getlogsDetails = async (req, res) => {
       message: "Logs fetched successfully",
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message || "Server error" });
   }
 };
 
-const getlogsData = async (req, res) => {
-  const key = String(req.params.key);
-  const { id, startDate, endDate, status, domain } = req.query;
-  console.log("📥 Received Query Params:", req.query);
+// const getlogsData = async (req, res) => {
+//   const key = String(req.params.key);
+//   const { id, startDate, endDate, status, domain } = req.query;
+//   const page = parseInt(req.query.page) || 1;
+//   const limit = parseInt(req.query.limit) || 10;
+//   const skip = (page - 1) * limit;
 
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const skip = (page - 1) * limit;
+//   try {
+//     // 1. Get key config
+//     const keyData = await API_Config.findById(id);
+//     if (!keyData) return res.status(404).json({ message: "Key not found" });
+
+//     const dbName = keyData.dbName;
+//     const conn = await connectDynamicDB(dbName);
+
+//     // 2. Logs model
+
+//     const logs_table = `logs_table_${new Date().getFullYear()}_${String(
+//       new Date().getMonth() + 1
+//     ).padStart(2, "0")}`;
+//     const LogModel = conn.collection(`${logs_table}`);
+
+//     // 3. Query filters
+//     const query = { key, vendor_name: domain };
+//   if (startDate && endDate) {
+//       query.request_time = {
+//         $gte: format(new Date(startDate), "yyyy-MM-dd HH:mm:ss"),
+//         $lte: format(new Date(endDate), "yyyy-MM-dd HH:mm:ss"),
+//       };
+//     }
+
+//      if (status) query.status_code = parseInt(status, 10);
+
+//       const totalDocs = await LogModel.countDocuments(query);
+//        const logs = await LogModel.find(query)
+//       .sort({ _id: -1 })
+//       .skip(skip)
+//       .limit(limit)
+//       .toArray();
+
+//     // 8. Send response
+//     res.status(200).json({
+//       data: keyData,
+//       logdata: {
+//         data: logs,
+//         totalDocs,
+//         currentPage: page,
+//         limit,
+//       },
+//       message: "Logs fetched successfully",
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message || "Server error" });
+//   }
+// };
+
+const getlogsData = async (req, res) => {
+  console.log("📥 getlogsData called");
+
+  const key = String(req.params.key);
+  const {
+    id,
+    startDate,
+    endDate,
+    status,
+    domain,
+    page = 1,
+    limit = 10,
+  } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    // 1. Get key config
+    // 1️⃣ Get key config
     const keyData = await API_Config.findById(id);
-    if (!keyData) return res.status(404).json({ message: "Key not found" });
+    if (!keyData) {
+      return res.status(404).json({ message: "Key not found" });
+    }
 
     const dbName = keyData.dbName;
     const conn = await connectDynamicDB(dbName);
 
-    // 2. Logs model
-    const logSchema = new mongoose.Schema({}, { strict: false });
-    const logs_table = `logs_table_${new Date().getFullYear()}_${String(
-      new Date().getMonth() + 1
-    ).padStart(2, "0")}`;
-    const LogModel = conn.model(`${logs_table}`, logSchema, `${logs_table}`);
+    // 2️⃣ Get existing collections
+    const collections = await conn.listCollections().toArray();
+    const existingCollections = collections
+      .map((c) => c.name)
+      .filter((name) => name.startsWith("logs_table_"));
 
-    // 3. Query filters
-    const query = { key, vendor_name: domain };
-    const formattedStart = startDate
-      ? format(new Date(startDate), "yyyy-MM-dd HH:mm:ss")
-      : null;
-    const formattedEnd = endDate
-      ? format(new Date(endDate), "yyyy-MM-dd HH:mm:ss")
-      : null;
-    if (formattedStart && formattedEnd) {
-      query.request_time = {
-        $gte: formattedStart,
-        $lte: formattedEnd,
+    // 3️⃣ Determine collections to query (based on date range)
+    let logCollections = [];
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      let current = new Date(start.getFullYear(), start.getMonth(), 1);
+      while (current <= end) {
+        const collectionName = `logs_table_${current.getFullYear()}_${String(
+          current.getMonth() + 1
+        ).padStart(2, "0")}`;
+        if (existingCollections.includes(collectionName)) {
+          logCollections.push(collectionName);
+        }
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else {
+      // Default: current month collection
+      const now = new Date();
+      const collectionName = `logs_table_${now.getFullYear()}_${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}`;
+      if (existingCollections.includes(collectionName)) {
+        logCollections.push(collectionName);
+      }
+    }
+
+    if (logCollections.length === 0) {
+      return res.status(200).json({
+        data: keyData,
+        logdata: {
+          data: [],
+          totalDocs: 0,
+          currentPage: parseInt(page),
+          limit: parseInt(limit),
+        },
+        message: "No log collections found for given date range",
+      });
+    }
+
+    console.log("🗂 Collections to query:", logCollections);
+
+    // 4️⃣ Build base query
+    const baseQuery = { key };
+    if (domain) baseQuery.vendor_name = domain;
+    if (status) baseQuery.status_code = parseInt(status, 10);
+
+    // If date range provided
+    if (startDate && endDate) {
+      baseQuery.request_time = {
+        $gte: format(new Date(startDate), "yyyy-MM-dd HH:mm:ss"),
+        $lte: format(new Date(endDate), "yyyy-MM-dd HH:mm:ss"),
       };
     }
-    // if (status) {
-    //   if (status === "success") query.status_code = 200;
-    //   else if (status === "failure") query.status_code = { $ne: 200 };
-    // }
 
-    // 4. Get total + paginated logs (facet with NO allLogs)
-    const result = await LogModel.aggregate([
-      { $match: query },
-      { $sort: { _id: -1 } },
-      {
-        $facet: {
-          totalDocs: [{ $count: "count" }],
-          paginatedLogs: [{ $skip: skip }, { $limit: limit }],
-        },
-      },
-    ]);
+    // 5️⃣ Fetch logs from each collection
+    let allLogs = [];
+    let totalDocs = 0;
 
-    const totalDocs = result[0].totalDocs[0]?.count || 0;
-    const logs = result[0].paginatedLogs;
+    for (const collectionName of logCollections) {
+      const collection = conn.collection(collectionName);
 
-    // 8. Send response
+      const collectionCount = await collection.countDocuments(baseQuery);
+      totalDocs += collectionCount;
+
+      console.log(`📊 ${collectionName} → ${collectionCount} docs`);
+
+      if (collectionCount > 0) {
+        const logs = await collection
+          .find(baseQuery)
+          .sort({ _id: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        console.log(`📜 ${collectionName} logs fetched:`, logs.length);
+        allLogs.push(...logs);
+      }
+    }
+
+    // 6️⃣ Combine, sort, and paginate globally
+    allLogs.sort((a, b) => b._id.getTimestamp() - a._id.getTimestamp());
+
+    // Optional: Global pagination (if multiple collections overlap)
+    const paginatedLogs = allLogs.slice(0, parseInt(limit));
+
+    // 7️⃣ Send response
     res.status(200).json({
       data: keyData,
       logdata: {
-        data: logs,
+        data: paginatedLogs,
         totalDocs,
-        currentPage: page,
-        limit,
+        currentPage: parseInt(page),
+        limit: parseInt(limit),
       },
-      message: "Logs fetched successfully",
+      message: "✅ Logs fetched successfully",
     });
   } catch (err) {
+    console.error("❌ Error fetching logs:", err);
     res.status(500).json({ message: err.message || "Server error" });
   }
 };
@@ -1095,24 +1217,31 @@ const getcustomerbysearch = async (req, res) => {
   try {
     const { search = "" } = req.query;
 
-       const users = await mongoose.connection.db
+    const users = await mongoose.connection.db
       .collection("users")
       .aggregate([
         {
           $lookup: {
-            from: "roles",        // roles collection
+            from: "roles", // roles collection
             localField: "roleId", // field in users
-            foreignField: "_id",  // field in roles
+            foreignField: "_id", // field in roles
             as: "roleInfo",
           },
         },
         { $unwind: "$roleInfo" }, // flatten role array
-        { $match: { "roleInfo.roleName": "Customer", name: { $regex: search, $options: "i" } } }, // filter by role and search
+        {
+          $match: {
+            "roleInfo.roleName": "Customer",
+            name: { $regex: search, $options: "i" },
+          },
+        }, // filter by role and search
         { $project: { _id: 1, name: 1 } }, // only return id and name
       ])
       .toArray();
 
-    res.status(200).json({ data :users, message: "Users fetched successfully" });
+    res
+      .status(200)
+      .json({ data: users, message: "Users fetched successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1137,4 +1266,5 @@ module.exports = {
   getlogsData,
   permanentDeletekey,
   getcustomerbysearch,
+  addcustomerToAPI,
 };

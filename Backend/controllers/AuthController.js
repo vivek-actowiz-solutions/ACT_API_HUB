@@ -178,12 +178,12 @@ const login = async (req, res) => {
       .collection("roles")
       .findOne(
         { _id: new ObjectId(user.roleId) },
-        { projection: { permissions: 1 } }
+        { projection: { permissions: 1  , Rolelevel:1} }
       );
     console.log("permission", permission);
 
     const token = jwt.sign(
-      { id: user._id, role: user.roleId, name: user.name, email: user.email },
+      { id: user._id, role: user.roleId, Rolelevel:permission.Rolelevel, name: user.name, email: user.email },
       process.env.JWT_SECRET
     );
     res.cookie("token", token, {

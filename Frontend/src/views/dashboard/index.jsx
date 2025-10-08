@@ -5,6 +5,7 @@ import GaugeComponent from 'react-gauge-component';
 import { addMinutes, addHours } from 'date-fns';
 import { FcSearch } from 'react-icons/fc';
 import { AiOutlineClear } from 'react-icons/ai';
+import { LuTimerReset } from 'react-icons/lu';
 import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
 import { api } from 'views/api';
@@ -347,8 +348,20 @@ const DashDefault = () => {
                   }}
                   onClick={() => navigate(`/api-detail/${items._id}`)}
                 >
-                  <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>
-                    Avrege Execution time: {parseFloat(items?.avgExecutionTime?.toFixed(2)) || 0}s
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: '6px',
+                      fontSize: '16px',
+                      fontWeight: '500',
+                      marginTop: '8px',
+                      marginRight: '10px'
+                    }}
+                  >
+                    <LuTimerReset size={18} style={{ color: '#555' }} />
+                    <span>{((items?.avgExecutionTime || 0) * 1000).toFixed(0)} ms</span>
                   </div>
                   <GaugeComponent
                     className="p-0"
@@ -398,12 +411,24 @@ const DashDefault = () => {
                   style={{
                     cursor: 'pointer',
                     transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                    minHeight: '240px'
+                    minHeight: '280px'
                   }}
                   onClick={() => navigate(`/api-detail/${items._id}`)}
                 >
-                  <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>
-                    Avrege Execution time: {parseFloat(items?.avgExecutionTime?.toFixed(2)) || 0}s
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: '6px',
+                      fontSize: '16px',
+                      fontWeight: '500',
+                      marginTop: '8px',
+                      marginRight: '10px'
+                    }}
+                  >
+                    <LuTimerReset size={18} style={{ color: '#555' }} />
+                    <span>{((items?.avgExecutionTime || 0) * 1000).toFixed(0)} ms</span>
                   </div>
 
                   <GaugeComponent
@@ -442,7 +467,8 @@ const DashDefault = () => {
                     }}
                   />
                   <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>
-                   <span style={{ color: 'green' }}> {items.successCount} </span> /<span style={{ color: 'blue' }}> {items.totalCount} </span> 
+                    <span style={{ color: 'green' }}> {items.successCount} </span> /
+                    <span style={{ color: 'blue' }}> {items.totalCount} </span>
                   </div>
                   {/* API Name below gauge */}
                   <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>

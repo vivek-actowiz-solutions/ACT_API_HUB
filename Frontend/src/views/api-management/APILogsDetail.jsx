@@ -22,6 +22,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { format } from 'date-fns';
 import Select from 'react-select';
+import { tr } from 'date-fns/locale';
 // import { wait } from '@testing-library/user-event/dist/types/utils';
 const statusOptions = [
   { value: '200', label: '200 ' },
@@ -75,7 +76,7 @@ const KeyManagement = () => {
       });
 
       setLogData(res.data.logdata || []);
-      setFilteredData(res.data.logdata?.data || []);
+      // setFilteredData(res.data.logdata?.data || []);
       setChartData(res.data.logdata.chartData || []);
     } catch (err) {
       console.log(err);
@@ -89,6 +90,7 @@ const KeyManagement = () => {
     }
   };
   const fetchLogDetails = async (filter = false) => {
+    console.log('filter', filter);
 setDataloader(true);
     console.log('id', id);
     try {
@@ -103,8 +105,10 @@ setDataloader(true);
           ...(statusFilter && { status: statusFilter.toLowerCase() })
         }
       });
+console.log('res', res.data.logdata?.data);
+      // setLogData(res.data.logdata || []);
+      setFilteredData(res.data.logdata?.data);
 
-      setFilteredData(res.data.logdata?.data || []);
     } catch (err) {
       console.log(err);
       if (err.response && err.response.status === 403) {
@@ -131,7 +135,7 @@ setDataloader(true);
   }, [statusFilter]);
   useEffect(() => {
     fetchLogDetails();
-  }, [currentPage ,perPage])
+  }, [currentPage ,perPage ,statusFilter])
   const truncateForExcel = (text) => {
     if (!text) return '';
     const str = text.toString();
@@ -222,6 +226,8 @@ setDataloader(true);
       return;
     }
     fetchKeyDetails(true);
+    fetchLogDetails(true);
+
   };
 
   const handleViewResponse = (log) => {

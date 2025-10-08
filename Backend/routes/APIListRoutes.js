@@ -18,7 +18,8 @@ const {
   generateDoc ,
   getlogsData,
   permanentDeletekey ,
-  getcustomerbysearch
+  getcustomerbysearch ,
+  addcustomerToAPI
 } = require("../controllers/APIListController");
 const protect = require("../middleware/AuthMiddleware");
 const RolePermissionMiddleware = require("../middleware/RolePermissionMiddleware");
@@ -37,6 +38,7 @@ router.get(
   RolePermissionMiddleware("Api_key_Details"),
   getAPIListById
 );
+router.put("/add-customer-to-api/:id", protect,  addcustomerToAPI);
 router.get("/get-apikey-List/:id", protect,  getAPIkeyList);
 router.get("/get-apikey-history-List/:id", protect, getAPIkeyhistoryList);
 router.put("/apistatusupdate/:id", protect, apistatusupdate);

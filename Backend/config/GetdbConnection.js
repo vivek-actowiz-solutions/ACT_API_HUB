@@ -60,62 +60,96 @@
 
 // config/dynamicDB.js
 
-const mongoose = require("mongoose");
+// const mongoose = require("mongoose");
+// const { MongoClient } = require("mongodb");
+
+// const connectDynamicDB = async (dbName) => {
+//   const baseURI = process.env.MONGO_URI;
+//   const fullURI = `${baseURI}/${dbName}?authSource=admin`;
+
+//   // console.log(`📥 Checking if database [${dbName}] exists...`);
+
+//   try {
+//     // Step 1: Check if database exists using MongoClient
+//     const client = await MongoClient.connect(`${baseURI}/admin`, {
+//       // useNewUrlParser: true,
+//       // useUnifiedTopology: true,
+//     });
+
+//     const admin = client.db().admin();
+//     const dbList = await admin.listDatabases();
+
+//     const dbExists = dbList.databases.some((db) => db.name === dbName);
+//     await client.close();
+
+//     if (!dbExists) {
+//       console.error(
+//         `❌ Database [${dbName}] does not exist. Please create it first.`
+//       );
+//       throw new Error(
+//         `Database [${dbName}] does not exist. Please create it first.`
+//       );
+//     }
+
+//     // console.log(`✅ Database [${dbName}] found. Connecting to: ${fullURI}`);
+
+//     // Step 2: Connect using Mongoose
+//     const connection = await mongoose.createConnection(fullURI, {
+//       // useNewUrlParser: true,
+//       // useUnifiedTopology: true,
+//       // serverSelectionTimeoutMS: 10000,
+//       // socketTimeoutMS: 45000,
+//     });
+
+//     connection.on("error", (err) => {
+//       console.error(
+//         `❌ Mongoose connection error on DB [${dbName}]:`,
+//         err.message
+//       );
+//     });
+
+//     connection.once("open", () => {
+//       // console.log(`✅ Connected to dynamic DB: ${dbName}`);
+//     });
+
+//     return connection;
+//   } catch (error) {
+//     console.error(error.message);
+//     throw new Error(`${error.message}`);
+//   }
+// };
+
+// module.exports = connectDynamicDB;
+
+// utils/connectDynamicDB.js
 const { MongoClient } = require("mongodb");
+
+const clientCache = {}; // cache clients per DB for reuse
 
 const connectDynamicDB = async (dbName) => {
   const baseURI = process.env.MONGO_URI;
   const fullURI = `${baseURI}/${dbName}?authSource=admin`;
 
-  // console.log(`📥 Checking if database [${dbName}] exists...`);
-
   try {
-    // Step 1: Check if database exists using MongoClient
-    const client = await MongoClient.connect(`${baseURI}/admin`, {
-      // useNewUrlParser: true,
-      // useUnifiedTopology: true,
-    });
-
-    const admin = client.db().admin();
-    const dbList = await admin.listDatabases();
-
-    const dbExists = dbList.databases.some((db) => db.name === dbName);
-    await client.close();
-
-    if (!dbExists) {
-      console.error(
-        `❌ Database [${dbName}] does not exist. Please create it first.`
-      );
-      throw new Error(
-        `Database [${dbName}] does not exist. Please create it first.`
-      );
+    // ✅ Reuse existing client if already connected
+    if (clientCache[dbName]) {
+      return clientCache[dbName];
     }
 
-    // console.log(`✅ Database [${dbName}] found. Connecting to: ${fullURI}`);
-
-    // Step 2: Connect using Mongoose
-    const connection = await mongoose.createConnection(fullURI, {
+    const client = new MongoClient(fullURI, {
       // useNewUrlParser: true,
       // useUnifiedTopology: true,
-      // serverSelectionTimeoutMS: 10000,
-      // socketTimeoutMS: 45000,
     });
 
-    connection.on("error", (err) => {
-      console.error(
-        `❌ Mongoose connection error on DB [${dbName}]:`,
-        err.message
-      );
-    });
+    await client.connect();
+    const db = client.db(dbName);
 
-    connection.once("open", () => {
-      // console.log(`✅ Connected to dynamic DB: ${dbName}`);
-    });
-
-    return connection;
+    console.log(`✅ Connected to dynamic DB: ${dbName}`);
+    clientCache[dbName] = db;
+    return db;
   } catch (error) {
-    console.error(error.message);
-    throw new Error(`${error.message}`);
+    console.error(`❌ Error connecting to dynamic DB [${dbName}]:`, error.message);
+    throw new Error(`Failed to connect to database: ${dbName}`);
   }
 };
 

@@ -8,9 +8,13 @@ import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DataTable from 'react-data-table-component';
-import MainCard from '../../components/Card/MainCard';
-import { api } from 'views/api';
+import MainCard from '../../components/Card/MainCard'; 
+import Select from 'react-select';
+import makeAnimated from 'react-select/animated';
 
+import { api } from 'views/api';
+import { set } from 'date-fns';
+const animatedComponents = makeAnimated();
 const ViewAPI = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -60,7 +64,9 @@ const ViewAPI = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [historyLogs, setHistoryLogs] = useState([]);
   const [historyLogsloading, setHistoryLogsLoading] = useState(false);
-
+  const [selected, setSelected] = useState([]);
+  console.log('selected', selected);
+  const [options, setOptions] = useState([]);
 
   // Debounced Search
   useEffect(() => {
@@ -85,6 +91,35 @@ const ViewAPI = () => {
     // fetchAPIkeyList();
   }, [id]);
 
+  useEffect(() => {
+    fetchcustomerData();
+  } , []);
+  const fetchcustomerData = async (inputValue) => {
+    try {
+      const res = await axios.get(`${api}/customer-by-search`, {
+        withCredentials: true
+      });
+    
+
+      if (res.status == 200) {
+        setOptions(
+          res.data?.data?.map((item) => ({
+            value: item._id,
+            label: item.name
+          })) || []
+        );
+      }
+      return (
+        res.data?.data?.map((item) => ({
+          value: item._id,
+          label: item.apiName
+        })) || []
+      );
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      return [];
+    }
+  };
   // Fetch API + key details
   const fetchAPIDetails = async () => {
     console.log('fetchAPIDetails');
@@ -307,6 +342,7 @@ const ViewAPI = () => {
           toast.success('Key added successfully');
           setShowAddModal(false);
           setAddForm({ name: '', key: '', limit: '', status: true });
+         setSelected([]);
           fetchAPIkeyList();
         }
       } catch (err) {
@@ -773,6 +809,11 @@ const ViewAPI = () => {
               </div>
 
               <Row>
+                <div>
+                 <p className="m-2">
+  Enter your <span style={{ color: 'red', fontWeight: 'bold' }}>YOUR_API_KEY</span> in the headers, customize the payload as needed, and then run the <span style={{ fontWeight: 'bold' }}>Test API</span>.
+</p>
+                </div>
                 <Col xs={12} md={6}>
                   <Accordion activeKey={activeKey} onSelect={(k) => setActiveKey(k)} className="custom-accordion">
                     <Accordion.Item eventKey="0">
@@ -1167,15 +1208,40 @@ const ViewAPI = () => {
           </Form.Group>
           <Form.Group>
             <Form.Label className="required">Name</Form.Label>
-            <Form.Control
-              type="text"
-              value={addForm.name}
-              isInvalid={!!errors.name}
-              onChange={(e) => {
-                setAddForm({ ...addForm, name: e.target.value });
-                setErrors({ ...errors, name: '' });
-              }}
-            />
+                 <Select
+                 isClearable
+             
+  closeMenuOnSelect={true}
+  components={animatedComponents}
+  loadOptions={fetchcustomerData} // async options fetch function
+  options={options} // fallback or static options
+  value={selected} // currently selected items
+  onChange={(selectedItems) => {
+    setSelected(selectedItems);
+    setAddForm({ ...addForm, name: selectedItems.label }); // update state
+    setErrors({ ...errors, name: '' }); // clear validation error
+  }}
+  placeholder="Search customers..."
+  styles={{
+    control: (base, state) => ({
+      ...base,
+      minHeight: '40px',
+      border: state.isFocused ? '1px solid #070707ff' : '1px solid #ccc',
+      boxShadow: 'none',
+      fontSize: '14px'
+    }),
+    menu: (base) => ({
+      ...base,
+      borderColor: '#070707ff',
+      fontSize: '12px'
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      padding: '2px 8px'
+    })
+  }}
+/>
+          
             <Form.Control.Feedback type="invalid">{errors.name}</Form.Control.Feedback>
           </Form.Group>
           <Form.Group className="mt-3">

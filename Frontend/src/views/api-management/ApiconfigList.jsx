@@ -32,43 +32,42 @@ const ApiconfigrationList = () => {
   const [selectedAPI, setSelectedAPI] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
-    const [selected, setSelected] = useState([]);
-    const [options, setOptions] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [options, setOptions] = useState([]);
   const [editData, setEditData] = useState({});
   useEffect(() => {
     getApiList(currentPage, perPage, search);
   }, [currentPage, perPage, search]);
 
+  const fetchcustomerData = async (inputValue) => {
+    try {
+      const res = await axios.get(`${api}/customer-by-search`, {
+        withCredentials: true
+      });
+      console.log('res1222222222', res.data.data);
 
-    const fetchcustomerData = async (inputValue) => {
-      if (!inputValue) return [];
-      try {
-        const res = await axios.get(`${api}/customer-by-search?search=${inputValue}`, {
-          withCredentials: true
-        });
-        if (res.status == 200) {
-          setOptions(
-            res.data?.data?.map((item) => ({
-              value: item._id,
-              label: item.apiName
-            })) || []
-          );
-        }
-        return (  
+      if (res.status == 200) {
+        setOptions(
           res.data?.data?.map((item) => ({
             value: item._id,
-            label: item.apiName
+            label: item.name
           })) || []
         );
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        return [];
       }
-    };
-useEffect(() => {
-  fetchcustomerData();
-})
-
+      return (
+        res.data?.data?.map((item) => ({
+          value: item._id,
+          label: item.apiName
+        })) || []
+      );
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      return [];
+    }
+  };
+  useEffect(() => {
+    fetchcustomerData();
+  }, []);
 
   const getApiList = async (page = 1, limit = 10, keyword = '') => {
     try {
@@ -201,7 +200,31 @@ useEffect(() => {
       setShowStatusModal(false);
     }
   };
+  const handleAddCustomerToAPI = async () => {
+    console.log('handleAddCustomerToAPI', selected);
+    if (!selected) {
+      toast.error('Please select a customer first!');
+      return;
+    }
+    try {
+      const payload = selected.map((item) => ({
+        customerId: item.value, // id
+        customerName: item.label // name
+      }));
 
+      console.log('payload', payload);
+
+      const res = await axios.put(`${api}/add-customer-to-api/${selectedAPI._id}`, payload, { withCredentials: true });
+      console.log('res', res);
+      if (res.status == 200) {
+        toast.success('Customer added successfully');
+        setShowAddCustomModal(false);
+        getApiList(currentPage, perPage, search);
+      }
+    } catch (error) {
+      console.log('error', error);
+    }
+  };
   const columns = [
     {
       name: 'No.',
@@ -299,9 +322,22 @@ useEffect(() => {
               </OverlayTrigger>
             )}
             {permission[0]?.action?.includes('View') && (
-              <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>Add Cutomers</Tooltip>}>
+              <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>Add Customers</Tooltip>}>
                 <span>
-                  <IoMdPersonAdd onClick={() => setShowAddCustomModal(true)} style={{ cursor: 'pointer', color: 'green' }} size={20} />
+                  <IoMdPersonAdd
+                    onClick={() => {
+                      setSelectedAPI(row); // ✅ set the API object
+                      setSelected(
+      row.customers?.map(c => ({
+        value: c.customerId,
+        label: c.customerName
+      })) || []
+    ); // pre-select already assigned customers
+                      setShowAddCustomModal(true); // ✅ open modal
+                    }}
+                    style={{ cursor: 'pointer', color: 'green' }}
+                    size={20}
+                  />
                 </span>
               </OverlayTrigger>
             )}
@@ -449,15 +485,15 @@ useEffect(() => {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={showAddCustomModal} onHide={() => setShowAddCustomModal(false)} size="lg" centered>
+      <Modal show={showAddCustomModal} onHide={() => setShowAddCustomModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Edit API Details</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Row>
-              <Col md={3} xs={12}>
-                <label className="form-label d-block mb-1">Search API</label>
+              <Col md={12}>
+                <label className="form-label d-block mb-1">Search customers</label>
                 <Select
                   isMulti
                   closeMenuOnSelect={false}
@@ -469,7 +505,7 @@ useEffect(() => {
                   options={options}
                   value={selected}
                   onChange={(selectedItems) => setSelected(selectedItems)}
-                  placeholder="Search & select API"
+                  placeholder="Search customers..."
                   styles={{
                     control: (base, state) => ({
                       ...base,
@@ -497,7 +533,9 @@ useEffect(() => {
           <Button variant="secondary" onClick={() => setShowAddCustomModal(false)}>
             Cancel
           </Button>
-          <Button variant="primary">Save Changes</Button>
+          <Button variant="primary" onClick={handleAddCustomerToAPI}>
+            Add Customer
+          </Button>
         </Modal.Footer>
       </Modal>
     </>
