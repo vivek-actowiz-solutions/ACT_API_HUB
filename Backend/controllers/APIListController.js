@@ -8,6 +8,7 @@ const { format } = require("date-fns");
 const connectDynamicDB = require("../config/GetdbConnection");
 const fs = require("fs");
 const path = require("path");
+const XLSX = require("xlsx");
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 // const { dateFormetter } = require("../util/dateFormetter");
@@ -103,9 +104,9 @@ const addcustomerToAPI = async (req, res) => {
   console.log("📥 Received Customers:", customers);
 
   if (!Array.isArray(customers)) {
-    return res
-      .status(400)
-      .json({ message: "Request body must be an array of customers" });
+    return res.status(400).json({
+      message: "Request body must be an array of customers",
+    });
   }
 
   try {
@@ -115,25 +116,56 @@ const addcustomerToAPI = async (req, res) => {
       return res.status(404).json({ message: "API Config not found" });
     }
 
-    // Track duplicates
-    let addedCustomers = [];
-    let skippedCustomers = [];
+    // If no customers provided, clear all
+    if (customers.length === 0) {
+      console.log("⚠️ No customers received, clearing database list.");
 
+      apiConfig.customers = [];
+      await apiConfig.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "No customers provided. Database cleared.",
+        data: apiConfig,
+      });
+    }
+
+    // Track changes
+    let addedCustomers = [];
+    let updatedCustomers = [];
+    let removedCustomers = [];
+
+    // --- 1️⃣ Remove customers not in new list ---
+    const newIds = customers.map((c) => c.customerId.toString());
+    const existingIds = apiConfig.customers.map((c) => c.customerId.toString());
+
+    // Find which existing customers should be removed
+    removedCustomers = apiConfig.customers.filter(
+      (c) => !newIds.includes(c.customerId.toString())
+    );
+
+    // Keep only those present in new list
+    apiConfig.customers = apiConfig.customers.filter((c) =>
+      newIds.includes(c.customerId.toString())
+    );
+
+    // --- 2️⃣ Add or update existing ---
     for (const cust of customers) {
       const { customerId, customerName } = cust;
+      if (!customerId || !customerName) continue;
 
-      if (!customerId || !customerName) {
-        skippedCustomers.push(cust);
-        continue;
-      }
-
-      const alreadyExists = apiConfig.customers.some(
+      const existing = apiConfig.customers.find(
         (c) => c.customerId.toString() === customerId
       );
 
-      if (alreadyExists) {
-        skippedCustomers.push(cust);
+      if (existing) {
+        // Update name if changed
+        if (existing.customerName !== customerName) {
+          existing.customerName = customerName;
+          updatedCustomers.push(cust);
+        }
       } else {
+        // Add new
         apiConfig.customers.push({ customerId, customerName });
         addedCustomers.push(cust);
       }
@@ -143,14 +175,18 @@ const addcustomerToAPI = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Customer(s) processed",
+      message: "Customer list synced successfully",
       added: addedCustomers,
-      skipped: skippedCustomers,
+      updated: updatedCustomers,
+      removed: removedCustomers,
+      totalCustomers: apiConfig.customers.length,
       data: apiConfig,
     });
   } catch (err) {
     console.error("❌ Error in addcustomerToAPI:", err);
-    res.status(500).json({ message: err.message || "Server error" });
+    res
+      .status(500)
+      .json({ message: err.message || "Internal Server Error" });
   }
 };
 // const getAPIListById = async (req, res) => {
@@ -253,6 +289,7 @@ const getAPIListById = async (req, res) => {
 
 const getAPIkeyList = async (req, res) => {
   const { id } = req.params;
+  const permission = res.locals.permissions;
   const rolelevel = req.user.Rolelevel;
   const clientName = req.user.name;
   const { page = 1, limit = 10, search = "" } = req.query;
@@ -294,6 +331,7 @@ const getAPIkeyList = async (req, res) => {
         page: pageNumber,
         limit: limitNumber,
       },
+      permission
     });
   } catch (err) {
     // console.error(" getAPIkeyList error:", err.message);
@@ -1247,6 +1285,42 @@ const getcustomerbysearch = async (req, res) => {
   }
 };
 
+const Apisampledata = async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const apiData = await API_Config.findById(id);
+    if (!apiData) return res.status(404).json({ message: "API not found" });
+
+    const sampleFilePath = apiData.sampleFile;
+    if (!sampleFilePath)
+      return res.status(400).json({ message: "Sample file not provided" });
+
+    const fullPath = path.resolve(sampleFilePath);
+    if (!fs.existsSync(fullPath))
+      return res.status(404).json({ message: "Sample file not found" });
+
+    // Read Excel file
+    const workbook = XLSX.readFile(fullPath);
+    const sheetName = workbook.SheetNames[0]; // get first sheet
+    const sheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(sheet); // convert to JSON
+
+
+
+
+    res.status(200).json({
+      count: jsonData.length,
+      data: jsonData,
+
+      message: "Excel file read successfully",
+    });
+  } catch (err) {
+    console.error("❌ Error reading sample file:", err);
+    res.status(500).json({ message: err.message || "Server error" });
+  }
+};
+
 module.exports = {
   getAPIList,
   getAPIListById,
@@ -1267,4 +1341,5 @@ module.exports = {
   permanentDeletekey,
   getcustomerbysearch,
   addcustomerToAPI,
+  Apisampledata,
 };

@@ -19,7 +19,7 @@ const {
   getlogsData,
   permanentDeletekey ,
   getcustomerbysearch ,
-  addcustomerToAPI
+  addcustomerToAPI , Apisampledata
 } = require("../controllers/APIListController");
 const protect = require("../middleware/AuthMiddleware");
 const RolePermissionMiddleware = require("../middleware/RolePermissionMiddleware");
@@ -39,7 +39,7 @@ router.get(
   getAPIListById
 );
 router.put("/add-customer-to-api/:id", protect,  addcustomerToAPI);
-router.get("/get-apikey-List/:id", protect,  getAPIkeyList);
+router.get("/get-apikey-List/:id", protect,   RolePermissionMiddleware("Api_key_Details"), getAPIkeyList);
 router.get("/get-apikey-history-List/:id", protect, getAPIkeyhistoryList);
 router.put("/apistatusupdate/:id", protect, apistatusupdate);
 router.post("/gettestapi", gettestapi);
@@ -54,5 +54,6 @@ router.get("/get-logs-data/:key",protect,RolePermissionMiddleware("Api_key_Detai
 router.get("/exportLogsData/:key", protect, getExportLogsData);
 router.get("/generate-doc" ,generateDoc) 
 router.get("/customer-by-search",  getcustomerbysearch);
+router.get("/get-api-sample-data/:id",Apisampledata);
 
 module.exports = router;

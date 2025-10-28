@@ -92,6 +92,10 @@ const apiConfigSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  sampleFile: {
+    type: String,
+    default: "",
+  },
 });
 
 module.exports = mongoose.model("API_Config", apiConfigSchema);

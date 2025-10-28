@@ -195,7 +195,8 @@ const apiconfigration = async (req, res) => {
     github_link ,
     header
   } = req.body;
-console.log("req.body", req.body)
+     const filePath = req.file ? `uploads/${req.file.filename}`  : null;
+
   if (
     !domainName ||
     !categoryName ||
@@ -217,12 +218,12 @@ console.log("req.body", req.body)
   const apiName = `${domainName?.toUpperCase()} | ${applicationType} | ${type} | ${subType} | ${country}`;
 
   try {
-    const conn = await connectDynamicDB(dbName);
-    const genericSchema = new mongoose.Schema({}, { strict: false });
- const logs_table = `logs_table_${new Date().getFullYear()}_${String(new Date().getMonth()+1).padStart(2,"0")}`;
-    console.log("logs_table" , logs_table)
-    const KeyModel = conn.model("key_tables", genericSchema, "key_tables");
-    const LogModel = conn.model(`${logs_table}`, genericSchema, logs_table);
+//     const conn = await connectDynamicDB(dbName);
+//     const genericSchema = new mongoose.Schema({}, { strict: false });
+//  const logs_table = `logs_table_${new Date().getFullYear()}_${String(new Date().getMonth()+1).padStart(2,"0")}`;
+//     console.log("logs_table" , logs_table)
+//     const KeyModel = conn.model("key_tables", genericSchema, "key_tables");
+//     const LogModel = conn.model(`${logs_table}`, genericSchema, logs_table);
 
     // const keyData = await KeyModel.find({}).lean();
     // const logData = await LogModel.find({}).lean();
@@ -276,7 +277,8 @@ console.log("req.body", req.body)
       applicationType,
       dbName,
       country,
-      github_link
+      github_link , 
+      sampleFile: filePath
     });
 
     await newConfig.save();

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Row, Col, Form, Button, Modal, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect ,useCallback } from 'react';
+import { Row, Col, Form, Button, Modal, Spinner , ListGroup } from 'react-bootstrap';
 import { toast, ToastContainer } from 'react-toastify';
 import { getData } from 'country-list';
 import Card from '../../components/Card/MainCard';
@@ -8,6 +8,7 @@ import axios from 'axios';
 import { api } from 'views/api';
 import Select from 'react-select';
 import { useNavigate } from 'react-router-dom';
+import { useDropzone } from 'react-dropzone';
 
 const Apiconfigration = () => {
   const navigate = useNavigate();
@@ -20,9 +21,10 @@ const Apiconfigration = () => {
     method: 'GET',
     applicationType: '',
     dbName: '',
-    country: '' ,
-    github_link: '',
+    country: '',
+    github_link: ''
   });
+ const [file, setFile] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [params, setParams] = useState([{ key: '', value: '' }]);
   const [headerParams, setHeaderParams] = useState([{ key: '', value: '' }]);
@@ -42,18 +44,17 @@ const Apiconfigration = () => {
     fetchPermissions();
   }, []);
 
-  const fetchPermissions = async () => { 
+  const fetchPermissions = async () => {
     try {
       const res = await axios.get(`${api}/get-apiconfigration`, { withCredentials: true });
-
     } catch (err) {
       console.log(err);
       if (err.response && err.response.status === 403) {
-          navigate(`/error/${err.response.status}`);
-          // toast.error(err.response?.data?.message || 'Access denied');
-        }
+        navigate(`/error/${err.response.status}`);
+        // toast.error(err.response?.data?.message || 'Access denied');
+      }
     }
-  }
+  };
 
   const handleParamChange = (index, field, value) => {
     const updatedParams = [...params];
@@ -80,6 +81,13 @@ const Apiconfigration = () => {
     setFormErrors({ ...formErrors, [name]: '' });
   };
 
+  // Drag and drop
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    multiple: false, // Only one file
+    onDrop: (acceptedFiles) => {
+      setFile(acceptedFiles[0]); // Replace existing file
+    },
+  });
   const payloadObject = params
     .filter((item) => item.key?.trim())
     .reduce((acc, curr) => {
@@ -109,54 +117,120 @@ const Apiconfigration = () => {
       setShowConfirm(true);
     }
   };
-  const handleSubmit = async () => {
-    const APIdata = {
-      domainName: formData.domainName,
-      categoryName: formData.categoryName,
-      type: formData.type,
-      subType: formData.subType,
-      apiEndpoint: formData.url,
-      method: formData.method,
-      applicationType: formData.applicationType,
-      dbName: formData.dbName,
-      country: formData.country,
-      payload: payloadType === 'form' ? payloadObject : JSON.parse(rawJson),
-      header: headerPayloadType === 'form' ? headerPayloadObject : JSON.parse(headerRawJson),
-      github_link: formData.github_link
-    };
+  // const handleSubmit = async () => {
+  //   const APIdata = {
+  //     domainName: formData.domainName,
+  //     categoryName: formData.categoryName,
+  //     type: formData.type,
+  //     subType: formData.subType,
+  //     apiEndpoint: formData.url,
+  //     method: formData.method,
+  //     applicationType: formData.applicationType,
+  //     dbName: formData.dbName,
+  //     country: formData.country,
+  //     payload: payloadType === 'form' ? payloadObject : JSON.parse(rawJson),
+  //     header: headerPayloadType === 'form' ? headerPayloadObject : JSON.parse(headerRawJson),
+  //     github_link: formData.github_link
+  //   };
 
-    try {
-      setIsLoading(true);
-      const res = await axios.post(
-        `
-        ${api}/apiconfigration`,
-        APIdata,
-        { withCredentials: true }
-      );
-      if (res.status === 200) {
-        toast.success(res.data.message);
-        setFormData({
-          domainName: '',
-          categoryName: '',
-          type: '',
-          url: '',
-          method: 'GET',
-          applicationType: '',
-          subType: '',
-          dbName: '',
-          country: ''
-        });
-        setParams([{ key: '', value: '' }]);
-        setShowConfirm(false);
-      }
-    } catch (err) {
-      console.log('Error:', err);
-      const msg = err?.response?.data?.message || '❌ API request failed';
-      toast.error(`Error: ${msg}`);
-    } finally {
-      setIsLoading(false);
+  //   try {
+  //     setIsLoading(true);
+  //     const res = await axios.post(
+  //       `
+  //       ${api}/apiconfigration`,
+  //       APIdata,
+  //       { withCredentials: true }
+  //     );
+  //     if (res.status === 200) {
+  //       toast.success(res.data.message);
+  //       setFormData({
+  //         domainName: '',
+  //         categoryName: '',
+  //         type: '',
+  //         url: '',
+  //         method: 'GET',
+  //         applicationType: '',
+  //         subType: '',
+  //         dbName: '',
+  //         country: ''
+  //       });
+  //       setParams([{ key: '', value: '' }]);
+  //       setShowConfirm(false);
+  //     }
+  //   } catch (err) {
+  //     console.log('Error:', err);
+  //     const msg = err?.response?.data?.message || '❌ API request failed';
+  //     toast.error(`Error: ${msg}`);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+  const handleSubmit = async () => {
+  try {
+    setIsLoading(true);
+
+    const formPayload = new FormData();
+
+    // Append form fields
+    formPayload.append("domainName", formData.domainName);
+    formPayload.append("categoryName", formData.categoryName);
+    formPayload.append("type", formData.type);
+    formPayload.append("subType", formData.subType);
+    formPayload.append("apiEndpoint", formData.url);
+    formPayload.append("method", formData.method);
+    formPayload.append("applicationType", formData.applicationType);
+    formPayload.append("dbName", formData.dbName);
+    formPayload.append("country", formData.country);
+    formPayload.append("github_link", formData.github_link);
+
+    // Append payload and header as JSON strings
+    formPayload.append("payload", payloadType === "form" ? JSON.stringify(payloadObject) : rawJson);
+    formPayload.append(
+      "header",
+      headerPayloadType === "form" ? JSON.stringify(headerPayloadObject) : headerRawJson
+    );
+
+    // Append uploaded files
+      if (file) {
+      formPayload.append("file", file); // Use singular key 'file'
     }
-  };
+
+    const res = await axios.post(`${api}/apiconfigration`, formPayload, {
+      withCredentials: true,
+      headers: {
+        "Content-Type": "multipart/form-data", // Axios sets boundary automatically
+      },
+    });
+
+    if (res.status === 200) {
+      toast.success(res.data.message);
+
+      // Reset form
+      setFormData({
+        domainName: "",
+        categoryName: "",
+        type: "",
+        url: "",
+        method: "GET",
+        applicationType: "",
+        subType: "",
+        dbName: "",
+        country: "",
+        github_link: "",
+      });
+      setFile(""); // clear uploaded files
+      setParams([{ key: "", value: "" }]);
+      setShowConfirm(false);
+    }
+  } catch (err) {
+    console.log("Error:", err);
+    const msg = err?.response?.data?.message || "❌ API request failed";
+    toast.error(`Error: ${msg}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
   document.title = 'API Integration';
   return (
     <>
@@ -181,18 +255,6 @@ const Apiconfigration = () => {
             </Col>
 
             <Col md={6}>
-              {/* <Form.Group>
-                <Form.Label>Category Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="categoryName"
-                  value={formData.categoryName}
-                  onChange={handleChange}
-                  placeholder="e.g. Electronics"
-                  isInvalid={!!formErrors.categoryName}
-                />
-                <Form.Control.Feedback type="invalid">{formErrors.categoryName}</Form.Control.Feedback>
-              </Form.Group> */}
               <Form.Group>
                 <Form.Label className="required">Category</Form.Label>
                 <Form.Select
@@ -303,7 +365,6 @@ const Apiconfigration = () => {
                 <Form.Control.Feedback type="invalid">{formErrors.method}</Form.Control.Feedback>
               </Form.Group>
             </Col>
-              
           </Row>
 
           {['POST'].includes(formData.method) && (
@@ -330,7 +391,7 @@ const Apiconfigration = () => {
               {payloadType === 'form' && (
                 <>
                   <h6 className="mt-3 mb-2 required">Payload Parameters</h6>
-                  <Row className="fw-bold border-bottom py-2 text-secondary">
+                  <Row className="fw-bold  py-2 text-secondary">
                     <Col md={6}>Key</Col>
                     <Col md={6}>Value</Col>
                   </Row>
@@ -370,77 +431,74 @@ const Apiconfigration = () => {
               )}
             </div>
           )}
-<Row className="mb-4">
-  <Col>
-  
-
-            <div className="mb-4">
-              <h6 className="mb-2 required">Header </h6>
-              <Form.Check
-                inline
-                label="Form Data"
-                name="headerPayloadType"
-                type="radio"
-                id="form-data"
-                checked={headerPayloadType === 'form'}
-                onChange={() => setHeaderPayloadType('form')}
-              />
-              <Form.Check
-                inline
-                label="Raw JSON"
-                name="headerPayloadType"
-                type="radio"
-                id="raw-data"
-                checked={headerPayloadType === 'raw'}
-                onChange={() => setHeaderPayloadType('raw')}
-              />
-              {headerPayloadType === 'form' && (
-                <>
-                  <h6 className="mt-3 mb-2 required">Header Parameters</h6>
-                  <Row className="fw-bold border-bottom py-2 text-secondary">
-                    <Col md={6}>Key</Col>
-                    <Col md={6}>Value</Col>
-                  </Row>
-
-                  {headerParams.map((param, index) => (
-                    <Row key={index} className="mb-2">
-                      <Col md={6}>
-                        <Form.Control
-                          type="text"
-                          placeholder="Key"
-                          value={param.key}
-                          onChange={(e) => handleHeaderParamChange(index, 'key', e.target.value)}
-                        />
-                      </Col>
-                      <Col md={6}>
-                        <Form.Control
-                          type="text"
-                          placeholder="Value"
-                          value={param.value}
-                          onChange={(e) => handleHeaderParamChange(index, 'value', e.target.value)}
-                        />
-                      </Col>
-                    </Row>
-                  ))}
-                </>
-              )}{' '}
-              {headerPayloadType === 'raw' && (
-                <div className="mt-3">
-                  <Form.Control
-                    as="textarea"
-                    rows={6}
-                    placeholder='{"x-api-key":"xyz","Content-Type":"application/json"}'
-                    value={headerRawJson}
-                    onChange={(e) => setHeaderRawJson(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-  </Col>
-</Row>
-      
           <Row className="mb-4">
-  
+            <Col>
+              <div className="mb-4">
+                <h6 className="mb-2 required">Header </h6>
+                <Form.Check
+                  inline
+                  label="Form Data"
+                  name="headerPayloadType"
+                  type="radio"
+                  id="form-data"
+                  checked={headerPayloadType === 'form'}
+                  onChange={() => setHeaderPayloadType('form')}
+                />
+                <Form.Check
+                  inline
+                  label="Raw JSON"
+                  name="headerPayloadType"
+                  type="radio"
+                  id="raw-data"
+                  checked={headerPayloadType === 'raw'}
+                  onChange={() => setHeaderPayloadType('raw')}
+                />
+                {headerPayloadType === 'form' && (
+                  <>
+                    <h6 className="mt-3 mb-2 required">Header Parameters</h6>
+                    <Row className="fw-bold  py-2 text-secondary">
+                      <Col md={6}>Key</Col>
+                      <Col md={6}>Value</Col>
+                    </Row>
+
+                    {headerParams.map((param, index) => (
+                      <Row key={index} className="mb-2">
+                        <Col md={6}>
+                          <Form.Control
+                            type="text"
+                            placeholder="Key"
+                            value={param.key}
+                            onChange={(e) => handleHeaderParamChange(index, 'key', e.target.value)}
+                          />
+                        </Col>
+                        <Col md={6}>
+                          <Form.Control
+                            type="text"
+                            placeholder="Value"
+                            value={param.value}
+                            onChange={(e) => handleHeaderParamChange(index, 'value', e.target.value)}
+                          />
+                        </Col>
+                      </Row>
+                    ))}
+                  </>
+                )}{' '}
+                {headerPayloadType === 'raw' && (
+                  <div className="mt-3">
+                    <Form.Control
+                      as="textarea"
+                      rows={6}
+                      placeholder='{"x-api-key":"xyz","Content-Type":"application/json"}'
+                      value={headerRawJson}
+                      onChange={(e) => setHeaderRawJson(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            </Col>
+          </Row>
+
+          <Row className="mb-4">
             <Col md={4}>
               <Form.Group>
                 <Form.Label className="required">Database Name</Form.Label>
@@ -455,7 +513,7 @@ const Apiconfigration = () => {
                 <Form.Control.Feedback type="invalid">{formErrors.dbName}</Form.Control.Feedback>
               </Form.Group>
             </Col>
-              <Col md={4}>
+            <Col md={4}>
               <Form.Group>
                 <Form.Label className="">GitHub URL</Form.Label>
                 <Form.Control
@@ -494,22 +552,27 @@ const Apiconfigration = () => {
                 )}
               </Form.Group>
             </Col>
-
-            {/* <Col md={4}>
-              <Form.Group>
-                <Form.Label>Collection Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="collectionName"
-                  value={formData.collectionName}
-                  onChange={handleChange}
-                  placeholder="myCollection"
-                  isInvalid={!!formErrors.collectionName}
-                />
-                <Form.Control.Feedback type="invalid">{formErrors.collectionName}</Form.Control.Feedback>
-              </Form.Group>
-            </Col> */}
           </Row>
+          {/* ---------- File Upload Section ---------- */}
+  <Row className="mb-4">
+      <Col>
+        <h6 className="mb-2 required">Upload Sample File</h6>
+
+        <div
+          {...getRootProps()}
+          className={`sow-upload-box ${isDragActive ? "active" : ""}`}
+          style={{ cursor: "pointer" }}
+        >
+          <input {...getInputProps()} />
+          {file ? (
+            <p className="file-name">{file.name}</p>
+          ) : (
+            <p>Drag & Drop Sample File here or click to upload</p>
+          )}
+        </div>
+      </Col>
+    </Row>
+
 
           <div className="d-flex justify-content-end">
             <Button

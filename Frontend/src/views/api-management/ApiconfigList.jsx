@@ -321,7 +321,7 @@ const ApiconfigrationList = () => {
                 </span>
               </OverlayTrigger>
             )}
-            {permission[0]?.action?.includes('View') && (
+            {permission[0]?.action?.includes('Add_customers') && (
               <OverlayTrigger placement="top" overlay={<Tooltip id={`tooltip-view-${row._id}`}>Add Customers</Tooltip>}>
                 <span>
                   <IoMdPersonAdd

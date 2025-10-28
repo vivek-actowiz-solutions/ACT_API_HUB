@@ -295,3 +295,29 @@ td {
   transform: scale(0.98);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
+
+.sow-upload-box {
+  border: 2px dashed #457ee1;
+  border-radius: 6px;
+  background-color: #FFFFFF;
+  text-align: center;
+  padding: 30px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #1c1c1c;
+  font-weight: 500;
+}
+
+.sow-upload-box:hover {
+  background-color: #f1f3f8;
+}
+
+.sow-upload-box.active {
+  background-color: #e9edf7;
+  border-color: #305de7;
+}
+
+.sow-upload-box p {
+  margin: 0;
+  font-size: 15px;
+}
