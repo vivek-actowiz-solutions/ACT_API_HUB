@@ -176,7 +176,7 @@ const ViewAPI = () => {
             }}
           >
             <FaKey className="me-2" />
-            API Key
+            API Key Usage
           </Nav.Link>
         </Nav.Item>
       </Nav>
