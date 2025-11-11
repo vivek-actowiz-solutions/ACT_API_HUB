@@ -62,7 +62,7 @@ const DashDefault = () => {
   const [range, setRange] = useState(quickRanges[0].fn());
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState(quickRanges[0]);
-  const [refreshInterval, setRefreshInterval] = useState('30s');
+  const [refreshInterval, setRefreshInterval] = useState('1m');
   const [openedOnce, setOpenedOnce] = useState(false);
 
   const handleClear = () => {
@@ -165,8 +165,6 @@ const DashDefault = () => {
   };
   const getIntervalMs = (interval) => {
     switch (interval) {
-      case '30s':
-        return 30000;
       case '1m':
         return 60000;
       case '5m':
@@ -310,7 +308,7 @@ const DashDefault = () => {
                 value={{ label: refreshInterval, value: refreshInterval }}
                 onChange={(selectedOption) => setRefreshInterval(selectedOption.value)}
                 options={[
-                  { value: '30s', label: '30s' },
+            
                   { value: '1m', label: '1 min' },
                   { value: '5m', label: '5 min' },
                   { value: '15m', label: '15 min' },
