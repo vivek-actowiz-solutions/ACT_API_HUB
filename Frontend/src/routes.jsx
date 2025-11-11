@@ -65,6 +65,12 @@ const routes = [
         element: lazy(() => import('./views/dashboard')),
         isPrivate: true
       },
+         {
+        exact: 'true',
+        path: '/naver',
+        element: lazy(() => import('./views/Naver/naver')),
+        isPrivate: true
+      },
       {
         exact: 'true',
         path: '/api-integration',
@@ -92,12 +98,14 @@ const routes = [
       {
         exact: 'true',
         path: '/setting/role',
-        element: lazy(() => import('./views/management/role'))
+        element: lazy(() => import('./views/management/role')) ,
+         isPrivate: true
       },
       {
         exact: 'true',
         path: '/setting/user',
-        element: lazy(() => import('./views/management/user'))
+        element: lazy(() => import('./views/management/user')),
+         isPrivate: true
       },
       {
         path: '*',

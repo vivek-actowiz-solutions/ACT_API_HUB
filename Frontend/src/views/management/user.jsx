@@ -27,18 +27,31 @@ const UserList = () => {
   const [roles, setRoles] = useState([]);
   const [selectedRole, setSelectedRole] = useState('');
 
-  useEffect(() => {
-    getApiList(currentPage, perPage, search);
-  }, [currentPage, perPage, search]);
+   // Role filter state
+  const [filterRole, setFilterRole] = useState('');
 
-  const getApiList = async (page = 1, limit = 10, keyword = '') => {
+    // Update role modal state
+  const [showUpdateRoleModal, setShowUpdateRoleModal] = useState(false);
+  const [selectedUserForRole, setSelectedUserForRole] = useState(null);
+  const [updatedRole, setUpdatedRole] = useState('');
+
+  useEffect(() => {
+    getApiList(currentPage, perPage, search ,filterRole);
+  }, [currentPage, perPage, search , filterRole]);
+
+  useEffect(() => {
+    getRoles();
+  }, []);
+
+  const getApiList = async (page = 1, limit = 10, keyword = '' ,roleId = '') => {
     try {
-      const res = await axios.get(`${api}/get-user?page=${page}&limit=${limit}&search=${keyword}`, {
+      const res = await axios.get(`${api}/get-user?page=${page}&limit=${limit}&search=${keyword}&roleId=${roleId}`, {
         withCredentials: true,
       });
+      console.log("res" , res.data)
       setApiList(res.data.data);
       setPermission(res.data.permission);
-      setTotalRows(res.data.pagination?.total || 0);
+      setTotalRows(res.data.total || 0);
     } catch (err) {
       console.log(err);
 
@@ -53,7 +66,7 @@ const UserList = () => {
 
   const getRoles = async () => {
     try {
-      const res = await axios.get(`${api}/get-roles`, { withCredentials: true });
+      const res = await axios.get(`${api}/get-roles-name`, { withCredentials: true });
       setRoles(res.data.data || []);
     } catch (error) {
       toast.error('Failed to load roles');
@@ -124,6 +137,40 @@ setLoading(true);
     }
   };
 
+  // ✅ Handle Role Update Modal open
+  const handleOpenRoleModal = (user) => {
+    setSelectedUserForRole(user);
+    setUpdatedRole(user.roleId || '');
+    setShowUpdateRoleModal(true);
+  };
+
+  // ✅ Handle Update Role API call
+  const handleUpdateRole = async (e) => {
+    e.preventDefault();
+    if (!updatedRole || !selectedUserForRole) {
+      toast.error('Please select a role');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.put(
+        `${api}/update-user-role/${selectedUserForRole._id}`,
+        { roleId: updatedRole },
+        { withCredentials: true }
+      );
+
+      toast.success('User role updated successfully');
+      setShowUpdateRoleModal(false);
+      setSelectedUserForRole(null);
+      getApiList(currentPage, perPage, search);
+    } catch (error) {
+      toast.error('Failed to update user role');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const columns = [
     {
       name: 'No.',
@@ -158,9 +205,17 @@ setLoading(true);
         </>
       ),
     },
-    {
+{
       name: 'Role',
-      cell: (row) => <Button size="sm" variant={'dark'}>{row.roleName}</Button>,
+      cell: (row) => (
+        <Button
+          size="sm"
+          variant="dark"
+          onClick={() => handleOpenRoleModal(row)}
+        >
+          {row.roleName || 'N/A'}
+        </Button>
+      ),
     },
   ];
 
@@ -179,12 +234,29 @@ setLoading(true);
                     placeholder="Search by Name or Email..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="me-2"
+                    className="me-1"
                   />
                 </Form>
               </Col>
+               {/* Role Filter */}
+              <Col md={3}>
+                <Form.Select
+                  value={filterRole}
+                  onChange={(e) => {
+                    setFilterRole(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="" >All Roles</option>
+                  {roles.map((role) => (
+                    <option key={role._id} value={role._id}>
+                      {role.roleName}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
 
-              <Col md={6} className="d-flex justify-content-end  gap-2">
+              <Col md={3} className="d-flex justify-content-end  gap-2">
                 {permission[0]?.action?.includes('Add') && (
                   <Button
                     variant="dark"
@@ -281,6 +353,52 @@ setLoading(true);
               </Button>
             )}
           
+          </Modal.Footer>
+        </Form>
+      </Modal>
+       {/* ✅ Update Role Modal */}
+      <Modal
+        show={showUpdateRoleModal}
+        onHide={() => setShowUpdateRoleModal(false)}
+        centered
+      >
+        <Form onSubmit={handleUpdateRole}>
+          <Modal.Header closeButton>
+            <Modal.Title>Update User Role</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>
+              Updating role for: <strong>{selectedUserForRole?.email}</strong>
+            </p>
+            <Form.Group>
+              <Form.Label>Select New Role</Form.Label>
+              <Form.Select
+                value={updatedRole}
+                onChange={(e) => setUpdatedRole(e.target.value)}
+              >
+                <option value="" hidden >Select Role</option>
+                {roles.map((role) => (
+                  <option key={role._id} value={role._id}>
+                    {role.roleName}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowUpdateRoleModal(false)}
+            >
+              Cancel
+            </Button>
+            {loading ? (
+              <Spinner animation="border" variant="primary" />
+            ) : (
+              <Button variant="primary" type="submit">
+                Update Role
+              </Button>
+            )}
           </Modal.Footer>
         </Form>
       </Modal>

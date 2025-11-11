@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema(
     otpExpiry: { type: Date },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: "roles" },
     designation: { type: String, required: true },
+    hasSeenTour: {
+    type: Boolean,
+    default: false,
+  },
+    roleVersion: { type: Number, default: 0 },
     status: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },

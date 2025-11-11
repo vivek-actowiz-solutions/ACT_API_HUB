@@ -23,17 +23,14 @@ const getModules = async (req, res) => {
 };
 
 const getRoles = async (req, res) => {
-    const permission = res.locals.permissions;
+  const permission = res.locals.permissions;
   console.log("permission in my api", permission);
 
-
   try {
-    const {  search = "" } = req.query;
+    const { search = "" } = req.query;
 
     const query = {
-      $or: [
-        { roleName: { $regex: search, $options: "i" } },
-      ],
+      $or: [{ roleName: { $regex: search, $options: "i" } }],
     };
     // use native collection
     const roles = await mongoose.connection.db
@@ -44,7 +41,7 @@ const getRoles = async (req, res) => {
     res.status(200).json({
       message: "Roles fetched successfully",
       data: roles,
-      permission
+      permission,
     });
   } catch (error) {
     console.error("Error fetching roles:", error);
@@ -53,7 +50,34 @@ const getRoles = async (req, res) => {
     });
   }
 };
+const getRolesname = async (req, res) => {
+  const permission = res.locals.permissions;
+  console.log("permission in my api", permission);
 
+  try {
+    const { search = "" } = req.query;
+
+    const query = {
+      $or: [{ roleName: { $regex: search, $options: "i" } }],
+    };
+    // use native collection
+    const roles = await mongoose.connection.db
+      .collection("roles")
+      .find(query)
+      .project({ roleName: 1 })
+      .toArray();
+
+    res.status(200).json({
+      message: "Roles fetched successfully",
+      data: roles,
+    });
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
 const updatePermissions = async (req, res) => {
   const { id } = req.params;
   const { permissions } = req.body;
@@ -65,7 +89,7 @@ const updatePermissions = async (req, res) => {
       .collection("roles")
       .updateOne(
         { _id: new mongoose.Types.ObjectId(id) },
-        { $set: { permissions } }
+        { $set: { permissions }, $inc: { tokenVersion: 1 } }
       );
 
     res.status(200).json({
@@ -85,7 +109,8 @@ const getusers = async (req, res) => {
 
   try {
     // query params with defaults
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, search = "", roleId = "" } = req.query;
+    console.log("get req.query", req.query);
 
     const pageNumber = parseInt(page) || 1;
     const pageLimit = parseInt(limit) || 10;
@@ -101,12 +126,19 @@ const getusers = async (req, res) => {
           ],
         }
       : {};
+    // combine search + role filter
+    let finalFilter = { ...searchFilter };
+
+    // ✅ If role filter is applied
+    if (roleId && mongoose.Types.ObjectId.isValid(roleId)) {
+      finalFilter.roleId = new mongoose.Types.ObjectId(roleId);
+    }
 
     // aggregation pipeline
     const users = await mongoose.connection.db
       .collection("users")
       .aggregate([
-        { $match: searchFilter }, // search filter
+        { $match: finalFilter }, // search filter
         {
           $lookup: {
             from: "roles", // roles collection
@@ -140,7 +172,7 @@ const getusers = async (req, res) => {
     res.status(200).json({
       message: "Users fetched successfully",
       data: users,
-  total,
+      total,
       permission,
     });
   } catch (error) {
@@ -155,15 +187,43 @@ const getusers = async (req, res) => {
 const updateuserstatus = async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
-console.log("status", status);
+  console.log("status", status);
   try {
     const User = await mongoose.connection.db
       .collection("users")
-      .updateOne({ _id: new mongoose.Types.ObjectId(id) }, { $set: { status } });
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        { $set: { status } }
+      );
     if (!User) return res.status(404).json({ message: "user not found" });
     res.status(200).json({ message: "User status updated successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message || "Server error" });
   }
 };
-module.exports = { getModules, getRoles, updatePermissions ,  getusers , updateuserstatus };
+const updateUserRole = async (req, res) => {
+  const id = req.params.id;
+  const { roleId } = req.body;
+  console.log(id, roleId);
+  try {
+    const User = await mongoose.connection.db
+      .collection("users")
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        { $set: { roleId: new mongoose.Types.ObjectId(roleId) } }
+      );
+    if (!User) return res.status(404).json({ message: "user not found" });
+    res.status(200).json({ message: "User role updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Server error" });
+  }
+};
+module.exports = {
+  getModules,
+  getRoles,
+  updatePermissions,
+  getRolesname,
+  getusers,
+  updateuserstatus,
+  updateUserRole,
+};

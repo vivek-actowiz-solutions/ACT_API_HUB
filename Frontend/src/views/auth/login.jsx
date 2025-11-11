@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Form, Button, Spinner, Card  , InputGroup } from 'react-bootstrap';
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { Container, Row, Col, Form, Button, Spinner, Card, InputGroup } from 'react-bootstrap';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { ToastContainer as ToastifyContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from 'axios';
@@ -14,7 +14,7 @@ const LoginPage = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [permission, setPermission] = useState({});
-    const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const validateForm = () => {
@@ -56,13 +56,17 @@ const LoginPage = () => {
         toast.success(res.data.Message || 'Login successful');
         setFormData({ email: '', password: '' });
         setLoading(false);
-        // setPermission(res.data.permission);
-        // menuItems(permission);
-        // Slight delay to show toast before navigating
-        setTimeout(() => {
-          navigate('/dashboard');
-          window.location.reload();
-        }, 500);
+        if (res.data.Rolelevel === 7) {
+          setTimeout(() => {
+            navigate('/naver');
+            window.location.reload();
+          }, 500);
+        } else {
+          setTimeout(() => {
+            navigate('/dashboard');
+            window.location.reload();
+          }, 500);
+        }
       }
     } catch (err) {
       const message = err.response?.data?.Message || 'Login failed!';
@@ -132,28 +136,23 @@ const LoginPage = () => {
                   <Form.Control.Feedback type="invalid">{errors.email}</Form.Control.Feedback>
                 </Form.Group>
 
-                 <Form.Group className="mb-3" controlId="formPassword">
-      <Form.Label>Password</Form.Label>
-      <InputGroup>
-        <Form.Control
-          type={showPassword ? "text" : "password"}
-          name="password"
-          placeholder="Enter password"
-          value={formData.password}
-          onChange={handleInputChange}
-          isInvalid={!!errors.password}
-        />
-        <InputGroup.Text
-          onClick={() => setShowPassword(!showPassword)}
-          style={{ cursor: "pointer" }}
-        >
-          {showPassword ? <FaEyeSlash /> : <FaEye />}
-        </InputGroup.Text>
-        <Form.Control.Feedback type="invalid">
-          {errors.password}
-        </Form.Control.Feedback>
-      </InputGroup>
-    </Form.Group>
+                <Form.Group className="mb-3" controlId="formPassword">
+                  <Form.Label>Password</Form.Label>
+                  <InputGroup>
+                    <Form.Control
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      placeholder="Enter password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      isInvalid={!!errors.password}
+                    />
+                    <InputGroup.Text onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer' }}>
+                      {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    </InputGroup.Text>
+                    <Form.Control.Feedback type="invalid">{errors.password}</Form.Control.Feedback>
+                  </InputGroup>
+                </Form.Group>
 
                 <div className="d-flex justify-content-between mb-3 small">
                   <Form.Check type="checkbox" label="Remember me" />
@@ -179,7 +178,6 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-
 
 // import React, { useState } from 'react';
 // import {

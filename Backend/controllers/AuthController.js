@@ -5,12 +5,9 @@ const generatePassword = require("generate-password");
 const sendMail = require("../utils/mailer");
 const mongoose = require("mongoose");
 const { ObjectId } = require("mongodb");
-// import dns from 'dns';
-// import geoip from 'geoip-lite';
-// const dns = require("dns");
-// const geoip = require("geoip-lite");
-// import fetch from "node-fetch";
-// const fetch = require("node-fetch");
+const LoginHistory = require("../models/LoginHistoryLogModel");
+const geoip = require("geoip-lite");
+const UAParser = require("ua-parser-js");
 const userRegister = async (req, res) => {
   const { email, roleId, designation } = req.body;
   console.log("req.body", req.body);
@@ -126,80 +123,155 @@ const userRegister = async (req, res) => {
   }
 };
 
-const login = async (req, res) => {
+// const login = async (req, res) => {
+//   const { email, password } = req.body;
+//   let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+//   // Clean if multiple IPs are present
+//   if (ip && ip.includes(",")) {
+//     ip = ip.split(",")[0].trim();
+//   }
+
+//   console.log("User IP:", ip);
+
+//   try {
+//     const user = await User.findOne({ email });
+//     console.log("user", user);
+//     if (!user) return res.status(404).json({ Message: "User not found" });
+//     if (!user.status) {
+//   return res
+//     .status(403)
+//     .json({ Message: "Your account is not active. Please contact support team." });
+// }
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch)
+//       return res.status(400).json({ Message: "Invalid credentials" });
+
+//     const permission = await mongoose.connection.db
+//       .collection("roles")
+//       .findOne(
+//         { _id: new ObjectId(user.roleId) },
+//         { projection: { permissions: 1  , Rolelevel:1 , tokenVersion:1} }
+//       );
+//     console.log("permission", permission);
+
+//     const token = jwt.sign(
+//       { id: user._id, role: user.roleId, Rolelevel:permission.Rolelevel, name: user.name, email: user.email , roleVersion : permission.tokenVersion},
+//       process.env.JWT_SECRET ,
+//           { expiresIn: '1d' }
+//     );
+//     res.cookie("token", token, {
+//       httpOnly: false,
+//       secure: false, // you're using HTTP + IPs => must be false
+//       sameSite: "Lax", // Lax allows cookie in normal browser POSTs
+//       maxAge: 24 * 60 * 60 * 1000,
+//     });
+//     // console.log("permission", permission);
+//     res.status(200).json({ Message: "Login successful", token, permission  , Rolelevel:permission.Rolelevel});
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({ Message: "Server error" });
+//   }
+// };
+ const login = async (req, res) => {
   const { email, password } = req.body;
   let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-  // Clean if multiple IPs are present
+  // 🧹 Clean multiple IPs (e.g., "192.168.0.1, 10.0.0.2")
   if (ip && ip.includes(",")) {
     ip = ip.split(",")[0].trim();
   }
 
-  console.log("User IP:", ip);
-
-  // Reverse DNS lookup
-  // dns.reverse(ip, (err, hostnames) => {
-  //   if (err) {
-  //     console.error("DNS reverse lookup failed:", err);
-  //   }
-
-  //   // Geo lookup
-  //   const geo = geoip.lookup(ip);
-
-  //   const loginInfo = {
-  //     ipAddress: ip,
-  //     hostname: hostnames && hostnames.length > 0 ? hostnames[0] : "Unknown",
-  //     location: geo
-  //       ? `${geo.city || "Unknown"}, ${geo.country || "Unknown"}`
-  //       : "Unknown",
-  //     userAgent: req.headers["user-agent"] || "Unknown",
-  //     loginTime: new Date(),
-  //   };
-
-  //   console.log("Login Info:", loginInfo);
-
-  //   // Send the info back in response (optional)
-  // });
+  // 🧹 Remove IPv6 prefix "::ffff:"
+  if (ip && ip.startsWith("::ffff:")) {
+    ip = ip.replace("::ffff:", "");
+  }
 
   try {
+    // ✅ Check user
     const user = await User.findOne({ email });
-    console.log("user", user);
     if (!user) return res.status(404).json({ Message: "User not found" });
-    if (!user.status) {
-  return res
-    .status(403)
-    .json({ Message: "Your account is not active. Please contact support team." });
-}
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ Message: "Invalid credentials" });
 
+    if (!user.status) {
+      return res.status(403).json({
+        Message:
+          "Your account is not active. Please contact the support team.",
+      });
+    }
+
+    // ✅ Password check
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ Message: "Invalid credentials" });
+
+    // ✅ Fetch permissions from roles collection
     const permission = await mongoose.connection.db
       .collection("roles")
       .findOne(
         { _id: new ObjectId(user.roleId) },
-        { projection: { permissions: 1  , Rolelevel:1} }
+        { projection: { permissions: 1, Rolelevel: 1, tokenVersion: 1 } }
       );
-    console.log("permission", permission);
 
+    // ✅ Generate JWT token
     const token = jwt.sign(
-      { id: user._id, role: user.roleId, Rolelevel:permission.Rolelevel, name: user.name, email: user.email },
-      process.env.JWT_SECRET
+      {
+        id: user._id,
+        role: user.roleId,
+        Rolelevel: permission?.Rolelevel,
+        name: user.name,
+        email: user.email,
+        roleVersion: permission?.tokenVersion,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
     );
+
+    // ✅ Set cookie (valid 1 day)
     res.cookie("token", token, {
       httpOnly: false,
-      secure: false, // you're using HTTP + IPs => must be false
-      sameSite: "Lax", // Lax allows cookie in normal browser POSTs
+      secure: false, // change to true when using HTTPS
+      sameSite: "Lax",
       maxAge: 24 * 60 * 60 * 1000,
     });
-    // console.log("permission", permission);
-    res.status(200).json({ Message: "Login successful", token, permission });
+
+    // ✅ Detect location and device
+    const geo = geoip.lookup(ip) || {};
+    console.log(" geo", geo);
+    const parser = new UAParser(req.headers["user-agent"]);
+    console.log("parser" , parser)
+    const deviceInfo = parser.getResult();
+
+
+
+    // ✅ Save login history in MongoDB
+    await LoginHistory.create({
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+      ip,
+      location: {
+        country: geo.country || "Unknown",
+        city: geo.city || "Unknown",
+        region: geo.region || "Unknown",
+      },
+      device: {
+        browser: deviceInfo.browser.name || "Unknown",
+        os: deviceInfo.os.name || "Unknown",
+        deviceType: deviceInfo.device.type || "null",
+      },
+    });
+
+    // ✅ Final response
+    res.status(200).json({
+      Message: "Login successful",
+      token,
+      permission,
+      Rolelevel: permission?.Rolelevel,
+    });
   } catch (err) {
-    console.log(err);
+    console.error("Login error:", err);
     res.status(500).json({ Message: "Server error" });
   }
 };
-
 const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const { id } = req.user;

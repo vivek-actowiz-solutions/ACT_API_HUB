@@ -180,6 +180,7 @@ const getAPIbysearch = async (req, res) => {
 const getDashboardData = async (req, res) => {
   const rolelevel = req.user.Rolelevel;
   const userId = req.user.id;
+  const username = req.user.name;
   const { ids, startDate, endDate } = req.query;
   console.log("req.query", req.query);
   const idArray = ids ? ids.split(",") : [];
@@ -188,7 +189,7 @@ const getDashboardData = async (req, res) => {
     // 1️⃣ Fetch API Configs
     const query = ids && idArray.length > 0 ? { _id: { $in: idArray } } : {};
     if (rolelevel === 4) {
-      query.customers = { $elemMatch: { customerId: userId } };
+      query.customers = { $elemMatch: { customerId: userId } }
     }
 
     const configs = await API_Config.find(query, {
@@ -197,6 +198,7 @@ const getDashboardData = async (req, res) => {
       apiName: 1,
       domainName: 1,
     }).sort({ _id: -1 });
+
 
     const TotalApi = configs.length;
     let TotalLogs = 0;
@@ -208,8 +210,27 @@ const getDashboardData = async (req, res) => {
       configs.map(async (config) => {
         try {
           const db = await connectDynamicDB(config.dbName);
+   let customerKey = null;
+          if (rolelevel === 4) {
+            const keyCollection = db.collection("key_tables");
+            const keyDoc = await keyCollection.findOne({ name: username });
 
-          // 2a️⃣ Get all available log collections
+            if (!keyDoc) {
+              console.warn(`No key found for user ${username} in ${config.dbName}`);
+              return {
+                _id: config._id,
+                dbName: config.dbName,
+                apiName: config.apiName,
+                totalCount: 0,
+                successCount: 0,
+                failureCount: 0,
+                successPercentage: 0,
+                failurePercentage: 0,
+                avgExecutionTime: 0,
+              };
+            }
+            customerKey = keyDoc.key;
+          }
           const collections = await db.listCollections().toArray();
         const existingCollections = collections
     .map(c => c.name)
@@ -257,21 +278,16 @@ const getDashboardData = async (req, res) => {
 
           const statusGroups = {
             success: [200],
-            fail: [400, 401, 403, 404, 408, 422, 429, 500, 502, 504],
+            fail: [400, 401, 403, 404, 408, 422, 429, 500, 502, 504 , 201 , 410],
           };
 
-          // Base query
+          
           const baseQuery = {
             vendor_name: { $regex: new RegExp(config.domainName, "i") },
-            key: {
-              $nin: [
-                "87p6t2X5S33SsqQXbYIx64ENGGpdtj1g8ZwppQWK",
-                "ISF2IYKT",
-                "act_internal_test",
-              ],
-            },
           };
-
+ if (rolelevel === 4 && customerKey) {
+            baseQuery.key = customerKey;
+          }
           if (startDate && endDate) {
             baseQuery.request_time = {
               $gte: startDate,

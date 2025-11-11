@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Button } from 'react-bootstrap';
+import { Row, Col, Card, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import GaugeComponent from 'react-gauge-component';
 import { addMinutes, addHours } from 'date-fns';
 import { FcSearch } from 'react-icons/fc';
@@ -16,7 +16,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { format } from 'date-fns';
 import Box from '@mui/material/Box';
 import LinearProgress from '@mui/material/LinearProgress';
-import { TextField } from '@mui/material';
+import DashboardTour from './DashboardTour';
 
 const animatedComponents = makeAnimated();
 
@@ -135,18 +135,23 @@ const DashDefault = () => {
         return 60000;
       case '5m':
         return 300000;
+      case '15m':
+        return 900000;
       default:
         return 30000; // fallback
     }
   };
   useEffect(() => {
-    fetchDashboardData();
-    // const interval = setInterval(() => {
-    //   fetchDashboardData();
-    // }, getIntervalMs(refreshInterval));
+  //  if (refreshInterval !== 'manual') {
+  //   fetchDashboardData(); // Initial fetch
+  //   const interval = setInterval(() => {
+  //     fetchDashboardData();
+  //   }, getIntervalMs(refreshInterval));
 
-    // // Cleanup when refreshInterval changes or component unmounts
-    // return () => clearInterval(interval);
+  //   // Cleanup when refreshInterval changes or component unmounts
+  //   return () => clearInterval(interval);
+  // }
+  fetchDashboardData();
   }, [refreshInterval]);
 
   useEffect(() => {
@@ -172,6 +177,7 @@ const DashDefault = () => {
   };
   return (
     <React.Fragment>
+      {/* <DashboardTour /> */}
       <Row className="mt-4 g-3 align-items-center mb-3">
         <Col md={3} xs={12}>
           <label className="form-label d-block mb-1">Search API</label>
@@ -285,7 +291,7 @@ const DashDefault = () => {
                   { value: '1m', label: '1 min' },
                   { value: '5m', label: '5 min' },
                   { value: '15m', label: '15 min' },
-                  { value: 'manual', label: 'Auto' }
+                  { value: 'Manual', label: 'Manual' }
                 ]}
               />
             </Col>
@@ -340,13 +346,10 @@ const DashDefault = () => {
           ? apiData?.map((items, index) => (
               <Col key={index} className="mb-4" style={{ flex: '0 0 20%', maxWidth: '20%' }}>
                 <Card
-                  className="shadow-sm rounded-3 text-center clickable-card "
+                  className="shadow-sm rounded-3 text-center"
                   style={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                     minHeight: '230px'
                   }}
-                  onClick={() => navigate(`/api-detail/${items._id}`)}
                 >
                   <div
                     style={{
@@ -400,20 +403,31 @@ const DashDefault = () => {
                     }}
                   />
 
-                  <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center' }}>{items.apiName}</div>
+                  <div
+                    className="clickable-card"
+                    onClick={() => navigate(`/api-detail/${items._id}`)}
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      marginTop: '8px',
+                      textAlign: 'center',
+                      padding: '5px',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                    }}
+                  >
+                    {items.apiName}
+                  </div>
                 </Card>
               </Col>
             ))
           : data?.map((items, index) => (
               <Col key={index} className="mb-4" style={{ flex: '0 0 20%', maxWidth: '20%' }}>
                 <Card
-                  className="shadow-sm rounded-3 text-center clickable-card"
+                  className="shadow-sm rounded-3 text-center "
                   style={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                    minHeight: '280px'
+                    minHeight: '230px'
                   }}
-                  onClick={() => navigate(`/api-detail/${items._id}`)}
                 >
                   <div
                     style={{
@@ -428,7 +442,18 @@ const DashDefault = () => {
                     }}
                   >
                     <LuTimerReset size={18} style={{ color: '#555' }} />
-                    <span>{((items?.avgExecutionTime || 0) * 1000).toFixed(0)} ms</span>
+                    <OverlayTrigger
+                      placement="right"
+                      overlay={<Tooltip id={`tooltip-execution-${index}`}>Latency ( in milliseconds )</Tooltip>}
+                    >
+                      <span
+                        style={{
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {((items?.avgExecutionTime || 0) * 1000).toFixed(0)} ms
+                      </span>
+                    </OverlayTrigger>
                   </div>
 
                   <GaugeComponent
@@ -466,12 +491,50 @@ const DashDefault = () => {
                       }
                     }}
                   />
-                  <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>
-                    <span style={{ color: 'green' }}> {items.successCount} </span> /
-                    <span style={{ color: 'blue' }}> {items.totalCount} </span>
-                  </div>
+                  <OverlayTrigger
+                    placement="right"
+                    overlay={
+                      <Tooltip id={`tooltip-count-${index}`}>
+                        <div style={{ textAlign: 'left' }}>
+                          <div>
+                            <span style={{ color: 'green', fontWeight: 'bold' }}>●</span> Successful Requests
+                          </div>
+                          <div>
+                            <span style={{ color: 'blue', fontWeight: 'bold' }}>●</span> Total Requests
+                          </div>
+                        </div>
+                      </Tooltip>
+                    }
+                  >
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        marginTop: '8px',
+                        textAlign: 'center',
+                        padding: '5px',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                      }}
+                    >
+                      <span style={{ color: 'green' }}>{items.successCount}</span> /
+                      <span style={{ color: 'blue' }}> {items.totalCount}</span>
+                    </div>
+                  </OverlayTrigger>
                   {/* API Name below gauge */}
-                  <div style={{ fontSize: '12px', fontWeight: '500', marginTop: '8px', textAlign: 'center', padding: '5px' }}>
+                  <div
+                    className="clickable-card"
+                    onClick={() => navigate(`/api-detail/${items._id}`)}
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      marginTop: '8px',
+                      textAlign: 'center',
+                      padding: '5px',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                    }}
+                  >
                     {items.apiName}
                   </div>
                 </Card>

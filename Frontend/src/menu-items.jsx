@@ -120,6 +120,22 @@ const allMenuItems = {
       ]
     },
     {
+      id: 'main',
+      title: 'Naver',
+      type: 'group',
+      icon: AiOutlineApi,
+      children: [
+        {
+          id: 'naverdashboard',
+          title: 'Dashboard',
+          type: 'item',
+          icon: IoHome,
+          url: '/naver',
+          permission: 'NaverDashboard'
+        }
+      ]
+    },
+    {
       id: 'apimanagement',
       title: 'API Management',
       type: 'group',

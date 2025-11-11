@@ -37,8 +37,8 @@ const statusOptions = [
   { value: '422', label: '422 ' }
 ];
 const exportOptions = [
-  { value: "excel", label: "Export as Excel" },
-  { value: "json", label: "Export as JSON" },
+  { value: 'excel', label: 'Export as Excel' },
+  { value: 'json', label: 'Export as JSON' }
 ];
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Title, Tooltip, Legend, Filler);
 
@@ -91,7 +91,7 @@ const KeyManagement = () => {
   };
   const fetchLogDetails = async (filter = false) => {
     console.log('filter', filter);
-setDataloader(true);
+    setDataloader(true);
     console.log('id', id);
     try {
       const res = await axios.get(`${api}/get-logs-data/${key}`, {
@@ -105,10 +105,9 @@ setDataloader(true);
           ...(statusFilter && { status: statusFilter.toLowerCase() })
         }
       });
-console.log('res', res.data.logdata?.data);
+      console.log('res', res.data.logdata?.data);
       // setLogData(res.data.logdata || []);
       setFilteredData(res.data.logdata?.data);
-
     } catch (err) {
       console.log(err);
       if (err.response && err.response.status === 403) {
@@ -116,7 +115,7 @@ console.log('res', res.data.logdata?.data);
         // toast.error(err.response?.data?.message || 'Access denied');
       }
       toast.error(err.response.data.message || 'Failed to load API logs');
-    }  finally {
+    } finally {
       setDataloader(false);
     }
   };
@@ -134,8 +133,8 @@ console.log('res', res.data.logdata?.data);
     fetchKeyDetails();
   }, [statusFilter]);
   useEffect(() => {
-    fetchLogDetails();
-  }, [currentPage ,perPage ,statusFilter])
+    fetchLogDetails(true);
+  }, [currentPage, perPage, statusFilter]);
   const truncateForExcel = (text) => {
     if (!text) return '';
     const str = text.toString();
@@ -227,7 +226,6 @@ console.log('res', res.data.logdata?.data);
     }
     fetchKeyDetails(true);
     fetchLogDetails(true);
-
   };
 
   const handleViewResponse = (log) => {
@@ -467,8 +465,8 @@ console.log('res', res.data.logdata?.data);
                   </Col>
                   <Col md={2} className="d-flex justify-content-end mt-4 mb-0">
                     <Select
-                      isClearable={false} 
-                      isLoading={exportLoader} 
+                      isClearable={false}
+                      isLoading={exportLoader}
                       placeholder="Export"
                       options={exportOptions}
                       onChange={(selectedOption) => {
@@ -588,25 +586,24 @@ console.log('res', res.data.logdata?.data);
                     <Spinner animation="border" variant="primary" />
                   </div>
                 ) : (
-
-                  <><DataTable
-                  columns={columns}
-                  data={filteredData}
-                  pagination
-                  paginationServer
-                  paginationTotalRows={logData.totalDocs || 0}
-                  paginationDefaultPage={currentPage}
-                  paginationPerPage={perPage}
-                  onChangePage={handlePageChange}
-                  onChangeRowsPerPage={handlePerRowsChange}
-                  highlightOnHover
-                  striped
-                  responsive
-                  persistTableHead
-                />
+                  <>
+                    <DataTable
+                      columns={columns}
+                      data={filteredData}
+                      pagination
+                      paginationServer
+                      paginationTotalRows={logData.totalDocs || 0}
+                      paginationDefaultPage={currentPage}
+                      paginationPerPage={perPage}
+                      onChangePage={handlePageChange}
+                      onChangeRowsPerPage={handlePerRowsChange}
+                      highlightOnHover
+                      striped
+                      responsive
+                      persistTableHead
+                    />
                   </>
                 )}
-                
               </>
             )}
           </MainCard>

@@ -6,13 +6,12 @@ import { toast } from 'react-toastify';
 import { Modal, Button, Form } from 'react-bootstrap';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { RiDraggable } from 'react-icons/ri';
-import Select from 'react-select';
-import { api } from 'views/api';
 import { GrTableAdd } from 'react-icons/gr';
 import MainCard from 'components/Card/MainCard';
 import * as XLSX from 'xlsx';
 import { FaEdit, FaCheck, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { saveAs } from 'file-saver';
+import { api } from 'views/api';
 
 const EditableColumnTableWithModal = ({ id }) => {
   const navigate = useNavigate();
@@ -26,6 +25,7 @@ const EditableColumnTableWithModal = ({ id }) => {
   const [showModal, setShowModal] = useState(false);
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+
   // 🔹 Initial Load
   useEffect(() => {
     fetchAPISampleData();
@@ -35,8 +35,7 @@ const EditableColumnTableWithModal = ({ id }) => {
     setLoading(true);
     try {
       const res = await axios.get(`${api}/get-api-sample-data/${id}`, { withCredentials: true });
-      console.log(res.data.data);
-      if (res.data.data) {
+      if (res.data.data && res.data.data.length > 0) {
         const data = res.data.data.map((item, index) => ({
           No: index + 1,
           ...item
@@ -51,8 +50,8 @@ const EditableColumnTableWithModal = ({ id }) => {
         }));
 
         setColumns(cols);
-        setOriginalColumns(cols);
-        setModalColumns(cols);
+        setOriginalColumns(JSON.parse(JSON.stringify(cols)));
+        setModalColumns(JSON.parse(JSON.stringify(cols)));
         setPermission(res.data.permission);
       }
     } catch (err) {
@@ -89,24 +88,36 @@ const EditableColumnTableWithModal = ({ id }) => {
 
   // 🔹 Modal Helpers
   const toggleVisibility = (key) => {
-    setModalColumns((prev) => prev.map((col) => (col.key === key ? { ...col, visible: !col.visible } : col)));
+    setModalColumns((prev) =>
+      prev.map((col) => (col.key === key ? { ...col, visible: !col.visible } : col))
+    );
   };
 
   const handleEditClick = (key) => {
-    setModalColumns((prev) => prev.map((col) => (col.key === key ? { ...col, editing: !col.editing } : col)));
+    setModalColumns((prev) =>
+      prev.map((col) => (col.key === key ? { ...col, editing: !col.editing } : col))
+    );
   };
 
   const handleLabelChange = (key, newLabel) => {
-    setModalColumns((prev) => prev.map((col) => (col.key === key ? { ...col, label: newLabel } : col)));
+    setModalColumns((prev) =>
+      prev.map((col) => (col.key === key ? { ...col, label: newLabel } : col))
+    );
   };
 
   const saveChanges = () => {
-    setColumns(modalColumns.map(({ editing, ...rest }) => rest));
+    // ✅ Apply modal changes to main columns
+    const updated = modalColumns.map(({ editing, ...rest }) => rest);
+    setColumns(JSON.parse(JSON.stringify(updated)));
     setShowModal(false);
   };
 
   const resetChanges = () => {
-    setModalColumns(originalColumns.map((col) => ({ ...col, editing: false })));
+    setModalColumns(
+      JSON.parse(
+        JSON.stringify(originalColumns.map((col) => ({ ...col, editing: false })))
+      )
+    );
   };
 
   const onDragEnd = (result) => {
@@ -116,6 +127,7 @@ const EditableColumnTableWithModal = ({ id }) => {
     items.splice(result.destination.index, 0, movedItem);
     setModalColumns(items);
   };
+
   const exportToExcel = () => {
     if (!tableData || tableData.length === 0) {
       toast.warning('No data available to export!');
@@ -152,13 +164,25 @@ const EditableColumnTableWithModal = ({ id }) => {
         {columns && columns.length > 0 ? (
           <div>
             <div className="d-flex justify-content-between align-items-center mb-3">
-              <Button variant="outline-dark" onClick={() => setShowModal(true)} className="me-2 d-flex align-items-center">
+              {/* 🛠️ Open modal with cloned columns */}
+              <Button
+                variant="outline-dark"
+                onClick={() => {
+                  setModalColumns(JSON.parse(JSON.stringify(columns))); // ✅ deep clone
+                  setShowModal(true);
+                }}
+                className="me-2 d-flex align-items-center"
+              >
                 <GrTableAdd className="me-2" />
                 Edit Table
               </Button>
 
               {/* 🟢 Export Button */}
-              <Button variant="outline-dark" onClick={exportToExcel} className="d-flex align-items-center">
+              <Button
+                variant="outline-dark"
+                onClick={exportToExcel}
+                className="d-flex align-items-center"
+              >
                 📤 Export Excel
               </Button>
             </div>
@@ -172,25 +196,18 @@ const EditableColumnTableWithModal = ({ id }) => {
               highlightOnHover
               dense
               onRowClicked={(row) => {
-                // use modalColumns or columns (both have updated labels & visibility)
                 const activeColumns = modalColumns.length ? modalColumns : columns;
-
-                // filter only visible ones
                 const visibleCols = activeColumns.filter((col) => col.visible);
-
-                // build filtered row data using UPDATED labels
                 const visibleRowData = {};
                 visibleCols.forEach((col) => {
                   visibleRowData[col.label] = row[col.key];
                 });
-
-                console.log('🟢 Visible Row Data with Updated Column Names:', visibleRowData);
                 setSelectedRow(visibleRowData);
                 setShowJsonModal(true);
               }}
             />
 
-            {/* 🔹 Modal */}
+            {/* 🔹 Edit Columns Modal */}
             <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
               <Modal.Header closeButton>
                 <Modal.Title>Edit Table Columns</Modal.Title>
@@ -218,7 +235,9 @@ const EditableColumnTableWithModal = ({ id }) => {
                                   <Form.Control
                                     type="text"
                                     value={col.label}
-                                    onChange={(e) => handleLabelChange(col.key, e.target.value)}
+                                    onChange={(e) =>
+                                      handleLabelChange(col.key, e.target.value)
+                                    }
                                     style={{ marginRight: 10 }}
                                   />
                                 ) : (
@@ -238,7 +257,9 @@ const EditableColumnTableWithModal = ({ id }) => {
                                 </Button>
 
                                 <Button
-                                  variant={col.visible ? 'outline-success' : 'outline-danger'}
+                                  variant={
+                                    col.visible ? 'outline-success' : 'outline-danger'
+                                  }
                                   size="sm"
                                   onClick={() => toggleVisibility(col.key)}
                                 >
@@ -266,7 +287,14 @@ const EditableColumnTableWithModal = ({ id }) => {
                 </Button>
               </Modal.Footer>
             </Modal>
-            <Modal show={showJsonModal} onHide={() => setShowJsonModal(false)} size="lg" centered>
+
+            {/* 🔹 JSON Modal */}
+            <Modal
+              show={showJsonModal}
+              onHide={() => setShowJsonModal(false)}
+              size="lg"
+              centered
+            >
               <Modal.Header closeButton>
                 <Modal.Title>Row Details (JSON View)</Modal.Title>
               </Modal.Header>
@@ -296,9 +324,7 @@ const EditableColumnTableWithModal = ({ id }) => {
             </Modal>
           </div>
         ) : (
-          <>
-            <h5 className="text-center mt-3">No data available</h5>
-          </>
+          <h5 className="text-center mt-3">No data available</h5>
         )}
       </MainCard>
     </>

@@ -10,6 +10,7 @@ const dashboard = require("./routes/DashboardRoutes");
 const apiconfigration = require("./routes/APIConfigreationRoutes");
 const apilist = require("./routes/APIListRoutes");
 const settings = require("./routes/managementRoutes");
+const NaverRoutes = require("./routes/NaverRoutes");
 const connectDB = require("./config/db");
 const cookieParser = require("cookie-parser");
 const app = express();
@@ -24,7 +25,7 @@ const allowedOrigins = [
 ];
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: { error: "Too many requests, please try again later." },
 });
 app.use("/api", apiLimiter);
@@ -45,6 +46,7 @@ app.use(
 connectDB(); // DB connect
 
 app.use("/api", authRoutes);
+app.use("/api", NaverRoutes);
 
 app.use("/api", apiconfigration);
 app.use("/api", apilist);
