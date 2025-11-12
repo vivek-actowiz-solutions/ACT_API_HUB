@@ -578,7 +578,7 @@ const DashDefault = () => {
               // value={items?.successPercentage ? items.successPercentage : 0}
               value={LatencyStats ? parseFloat(LatencyStats.avg_latency_sec) : 0}
               valueLabel={{
-                formatTextValue: (val) => `${val}%`,
+                formatTextValue: (val) => `${val} S`,
                 style: {
                   fontSize: '15px',
                   fontWeight: 'bold',
