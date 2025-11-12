@@ -202,16 +202,15 @@ const DashDefault = () => {
     return num;
   };
 
-
   const countStatusCodes = [
-           { code: 200, color: 'text-success', value: data.status_200 },
-        { code: 502, color: 'text-danger', value: data.status_502 },
-        { code: 500, color: 'text-danger', value: data.status_500 },
-        { code: 400, color: 'text-info', value: data.status_400 },
-        { code: 404, color: 'text-success', value: data.status_404 },
-        { code: 401, color: 'text-info', value: data.status_401 },
-        { code: 403, color: 'text-info', value: data.status_403 },
-  ]
+    { code: 200, color: 'text-success', value: data.status_200 },
+    { code: 502, color: 'text-danger', value: data.status_502 },
+    { code: 500, color: 'text-danger', value: data.status_500 },
+    { code: 400, color: 'text-info', value: data.status_400 },
+    { code: 404, color: 'text-success', value: data.status_404 },
+    { code: 401, color: 'text-info', value: data.status_401 },
+    { code: 403, color: 'text-info', value: data.status_403 }
+  ];
   return (
     <React.Fragment>
       {/* <DashboardTour /> */}
@@ -378,11 +377,11 @@ const DashDefault = () => {
           </Row>
         </Card.Body>
       </Card>
-      <Row className="mt-4" >
+      <Row className="mt-4">
         <Col xl={9} className="mb-4">
           <Card className="p-3 shadow-sm rounded-3 h-100">
             <Card.Title className="mb-4">Ratios</Card.Title>
-            <Row className='g-3'>
+            <Row className="g-3">
               {/* 1️⃣ Success Ratio */}
               <Col xl={4} lg={4} md={6} sm={12} className="mb-4">
                 <GaugeComponent
@@ -541,13 +540,11 @@ const DashDefault = () => {
             </Row>
           </Card>
         </Col>
-      
-      
-        <Col xl={3}  className="mb-4" >
 
-        {latencydataloading &&<Box sx={{ width: '100%', mb: 3 }}>{latencydataloading && <LinearProgress />}</Box> }
-        
-          <Card className="p-3 shadow-sm rounded-3 h-100" >
+        <Col xl={3} className="mb-4">
+          {latencydataloading && <Box sx={{ width: '100%', mb: 3 }}>{latencydataloading && <LinearProgress />}</Box>}
+
+          <Card className="p-3 shadow-sm rounded-3 h-100">
             <Card.Title className="mb-4">Avarage Response Time</Card.Title>
             <GaugeComponent
               className="p-0"
@@ -563,7 +560,7 @@ const DashDefault = () => {
                 cornerRadius: 5
               }}
               labels={{
-                valueLabel: { hide: false, style: { fontSize: '23px', fill: '#000000' } },
+                valueLabel: { hide: false, formatTextValue: (val) => `${val} s`, style: { fontSize: '23px', fill: '#000000' } },
                 tickLabels: {
                   hide: true,
                   ticks: [
@@ -577,14 +574,15 @@ const DashDefault = () => {
               }}
               // value={items?.successPercentage ? items.successPercentage : 0}
               value={LatencyStats ? parseFloat(LatencyStats.avg_latency_sec) : 0}
-              valueLabel={{
-                formatTextValue: (val) => `${val} S`,
-                style: {
-                  fontSize: '15px',
-                  fontWeight: 'bold',
-                  fill: '#cee21dff' // 👈 use fill, not color
-                }
-              }}
+              // valueLabel={{
+              //   hide: false,
+              //   formatTextValue: (val) => `${val}S`,
+              //   style: {
+              //     fontSize: '15px',
+              //     fontWeight: 'bold',
+              //     fill: '#cee21dff' // 👈 use fill, not color
+              //   }
+              // }}
             />
             <div
               style={{
@@ -600,28 +598,26 @@ const DashDefault = () => {
           </Card>
         </Col>
       </Row>
-    <Card className="shadow-sm border-1 rounded-3 p-2 h-100">
-  <Card.Title className="mb-3 ps-2 fw-semibold">Status Wise Count</Card.Title>
-  <Card.Body className="p-1">
-    <Row className="text-center g-2">
-      {countStatusCodes.map((status, index) => (
-        <Col
-          key={index}
-          xs={4}   // 3 per row on mobile
-          sm={3}   // 4 per row on small tablets
-          md={2}   // 6 per row on medium screens
-          lg       // auto on large screens
-          className="d-flex flex-column align-items-center justify-content-center"
-        >
-          <small className="text-muted">{status.code}</small>
-          <h4 className={`fw-bold ${status.color} mb-0`}>
-            {formatNumber(status.value || 0)}
-          </h4>
-        </Col>
-      ))}
-    </Row>
-  </Card.Body>
-</Card>
+      <Card className="shadow-sm border-1 rounded-3 p-2 h-100">
+        <Card.Title className="mb-3 ps-2 fw-semibold">Status Wise Count</Card.Title>
+        <Card.Body className="p-1">
+          <Row className="text-center g-2">
+            {countStatusCodes.map((status, index) => (
+              <Col
+                key={index}
+                xs={4} // 3 per row on mobile
+                sm={3} // 4 per row on small tablets
+                md={2} // 6 per row on medium screens
+                lg // auto on large screens
+                className="d-flex flex-column align-items-center justify-content-center"
+              >
+                <small className="text-muted">{status.code}</small>
+                <h4 className={`fw-bold ${status.color} mb-0`}>{formatNumber(status.value || 0)}</h4>
+              </Col>
+            ))}
+          </Row>
+        </Card.Body>
+      </Card>
     </React.Fragment>
   );
 };
